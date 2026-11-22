@@ -1,6 +1,6 @@
 // Raise the number whenever index.html or config.js changes, or tablets keep the old copy.
 const PREFIX = "field-logger-";
-const CACHE = PREFIX + "v1";
+const CACHE = PREFIX + "v2";
 const FILES = ["./", "./index.html", "./config.js", "./manifest.webmanifest"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting())); });
 self.addEventListener("activate", e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k.startsWith(PREFIX) && k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });

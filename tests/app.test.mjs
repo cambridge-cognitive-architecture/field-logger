@@ -53,3 +53,52 @@ test("the service worker caches every app file", () => {
   const sw = read("sw.js");
   for (const file of ["index.html", "config.js", "manifest.webmanifest"]) assert.ok(sw.includes(`./${file}`), file);
 });
+
+function exportTab(saved) {
+  const start = html.indexOf('$("#tab-export").addEventListener("click", ');
+  const end = html.indexOf("\n});", start);
+  const earlier = { lastBackup: null };
+  const state = { renders: 0, persisted: 0 };
+  let click;
+  const box = vm.createContext({
+    $: () => ({ addEventListener: (_, handler) => { click = handler; } }),
+    store: { archive: [earlier], consents: [] },
+    exportSession: async () => saved,
+    persist: () => state.persisted++,
+    renderExport: () => state.renders++,
+    Date,
+  });
+  vm.runInContext(html.slice(start, end + 4), box);
+  const tap = kind => click({ target: { closest: s => (s === "[data-aexp]" ? { dataset: { i: "0", aexp: kind } } : null) } });
+  return { earlier, state, tap };
+}
+
+test("earlier session: a failed save is not marked saved", async () => {
+  const { earlier, state, tap } = exportTab(false);
+  await tap("json");
+  assert.equal(earlier.lastBackup, null);
+  assert.equal(state.persisted, 0);
+});
+
+test("earlier session: a failed save keeps the time of the last good one", async () => {
+  const { earlier, tap } = exportTab(false);
+  earlier.lastBackup = 12345;
+  await tap("json");
+  assert.equal(earlier.lastBackup, 12345);
+});
+
+test("earlier session: a good save is marked saved", async () => {
+  const { earlier, state, tap } = exportTab(true);
+  await tap("json");
+  assert.equal(typeof earlier.lastBackup, "number");
+  assert.equal(state.persisted, 1);
+  assert.equal(state.renders, 1);
+});
+
+for (const kind of ["events", "ratings"]) {
+  test(`earlier session: saving ${kind} alone is not a session backup`, async () => {
+    const { earlier, tap } = exportTab(true);
+    await tap(kind);
+    assert.equal(earlier.lastBackup, null);
+  });
+}

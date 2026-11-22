@@ -288,7 +288,7 @@ h3{font-size:13px;letter-spacing:.1em;text-transform:uppercase;margin:0 0 10px;c
 <script>
 (() => {
 "use strict";
-const APP_VERSION = "1.0.0";
+const APP_VERSION = "1.0.1";
 /* ---------------- Study configuration: everything study-specific is in config.js ---------------- */
 const {
   DISPLAY_NAMES, ROLES, TASKS, TASK_NONE, SHIFTS, INITIATORS, PLACES, SESSION_NUMBERS, SHIFT_PHASES, NO_AREA,
@@ -1438,7 +1438,7 @@ function exportHtml(s, stats, checks) {
 $("#tab-export").addEventListener("click", async e => {
   const t = e.target;
   const ex = t.closest("[data-exp]"); if (ex) return exportSession(S, ex.dataset.exp);
-  const ax = t.closest("[data-aexp]"); if (ax) { const a = store.archive[+ax.dataset.i]; await exportSession(a, ax.dataset.aexp); if (ax.dataset.aexp === "json") { a.lastBackup = Date.now(); persist(); renderExport(); } return; }
+  const ax = t.closest("[data-aexp]"); if (ax) { const a = store.archive[+ax.dataset.i]; const ok = await exportSession(a, ax.dataset.aexp); if (ok && ax.dataset.aexp === "json") { a.lastBackup = Date.now(); persist(); renderExport(); } return; }
   if (t.closest("[data-nodel]")) { confirmKey = null; return renderExport(); }
   const cs = t.closest("[data-csavef]"); if (cs) { const c = store.consents[+cs.dataset.csavef]; const d = new Date(c.signedAt); if (await saveFile(`consent_${c.participantCode.replace(/\W+/g, "")}_${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}.html`, consentHtml(c))) { c.exportedAt = new Date().toISOString(); persist(); renderExport(); } return; }
   const cad = t.closest("[data-caskdel]"); if (cad) { confirmKey = "cdel" + cad.dataset.caskdel; return renderExport(); }
