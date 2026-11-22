@@ -1,0 +1,1626 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><link rel="manifest" href="manifest.webmanifest"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Field logger"><meta name="theme-color" content="#1f3a5f"><title>Field logger</title></head><body>
+<style>
+/* Layout: one-screen tablet tool — header bar, tabbed workspace; Live = floorplan left, logging rail right. */
+:root{
+  --bg:#eef1f0; --surface:#ffffff; --surface-2:#e4e9e7; --ink:#17212b; --muted:#566670; --rule:#c9d3d0;
+  --accent:#c2410c; --accent-ink:#ffffff; --zone:#1d5f8a; --open:#6b4fa3;
+  --ok:#2f7d4f; --warn:#9a6300; --danger:#b42318;
+  --map-bg:#f7f9f8; --map-zone:#dbe3e0; --map-edge:#8a9aa1;
+  --f-sans:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --r:8px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f1519; --surface:#172026; --surface-2:#1f2a31; --ink:#e6ecea; --muted:#94a4ac; --rule:#2d3b43;
+  --accent:#f07a3e; --accent-ink:#1a0d05; --zone:#5aa7d6; --open:#a88ee3;
+  --ok:#5cc28a; --warn:#e3a72f; --danger:#f06a5f;
+  --map-bg:#121b20; --map-zone:#24323b; --map-edge:#5c707a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1519; --surface:#172026; --surface-2:#1f2a31; --ink:#e6ecea; --muted:#94a4ac; --rule:#2d3b43;
+  --accent:#f07a3e; --accent-ink:#1a0d05; --zone:#5aa7d6; --open:#a88ee3;
+  --ok:#5cc28a; --warn:#e3a72f; --danger:#f06a5f;
+  --map-bg:#121b20; --map-zone:#24323b; --map-edge:#5c707a; color-scheme:dark}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-sans);font-size:15px;overflow:hidden}
+*{box-sizing:border-box}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--zone);outline-offset:2px}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+#app{height:100%;display:flex;flex-direction:column}
+
+/* header */
+.bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:8px 16px;background:var(--surface);border-bottom:1px solid var(--rule)}
+.brand{display:flex;flex-direction:column;line-height:1.1;margin-right:4px}
+.brand b{font-size:13px;letter-spacing:.14em;text-transform:uppercase}
+.brand span{font-size:11px;color:var(--muted);font-family:var(--f-mono)}
+.status{display:flex;gap:6px;flex-wrap:wrap;align-items:center;flex:1;min-width:0}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;background:var(--surface-2);font-size:12px;font-family:var(--f-mono);white-space:nowrap}
+.chip.zone{background:color-mix(in srgb,var(--zone) 18%,transparent);color:var(--zone);font-weight:600}
+.chip.warn{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
+.clock{font-family:var(--f-mono);font-size:15px;font-weight:500;font-variant-numeric:tabular-nums}
+.tabs{display:flex;gap:2px;background:var(--surface-2);padding:3px;border-radius:var(--r)}
+.tabs button{border:0;background:transparent;padding:7px 14px;border-radius:6px;font-size:13px;font-weight:600;color:var(--muted)}
+.tabs button[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgb(0 0 0/.12)}
+main{flex:1;min-height:0;position:relative}
+.tab{position:absolute;inset:0;overflow:auto}
+.pad{padding-block:20px;padding-inline:16px;max-width:1100px;margin:0 auto}
+
+/* generic controls */
+.btn{border:1px solid var(--rule);background:var(--surface);padding:9px 14px;border-radius:var(--r);font-weight:600;font-size:14px;min-height:42px}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.btn.accent{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.danger{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 50%,transparent)}
+.btn.ghost{background:transparent}
+.btn.sm{min-height:34px;padding:6px 10px;font-size:13px}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.lbl{display:block;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+.field input,.field select,.field textarea{width:100%;min-height:42px;padding:8px 10px;border:1px solid var(--rule);border-radius:var(--r);background:var(--surface)}
+.field textarea{min-height:70px;resize:vertical}
+.grid-form{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px}
+h2{font-size:20px;margin:0 0 4px;text-wrap:balance}
+h3{font-size:13px;letter-spacing:.1em;text-transform:uppercase;margin:0 0 10px;color:var(--muted)}
+.sub{color:var(--muted);margin:0 0 18px;max-width:68ch}
+#tab-session .sess{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:14px;align-items:start;max-width:1400px;margin:0 auto}
+@media (max-width:900px){#tab-session .sess{grid-template-columns:1fr}}
+#tab-session .panel{padding:12px 14px}
+#tab-session h3{margin:0 0 8px}
+#tab-session .g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+#tab-session .field input,#tab-session .field select{min-height:38px;padding:6px 8px}
+#tab-session .lbl{font-size:10px;margin-bottom:3px;min-height:16px;display:flex;align-items:center}
+#tab-session .inl{display:inline-flex;align-items:center;gap:4px;margin-left:8px;text-transform:none;letter-spacing:0;font-weight:500}
+#tab-session .inl input{width:14px;height:14px;min-height:0;margin:0}
+#tab-session .cklist{display:flex;flex-direction:column;gap:2px}
+#tab-session .ck{display:flex;gap:9px;align-items:flex-start;font-size:13.5px;line-height:1.3;padding:4px 0;cursor:pointer}
+#tab-session .ck input{width:20px;height:20px;min-height:0;flex:none;margin:0}
+#tab-session .ck .quote{display:block;font-size:12px;color:var(--muted);margin-top:2px}
+#tab-session .row .note{font-size:12px}
+.panel{background:var(--surface);border:1px solid var(--rule);border-radius:10px;padding:16px}
+.stack{display:flex;flex-direction:column;gap:16px}
+.note{font-size:13px;color:var(--muted)}
+.draft{font-size:10px;font-family:var(--f-mono);color:var(--warn);border:1px solid currentColor;border-radius:4px;padding:0 4px;margin-left:6px;vertical-align:middle}
+
+/* live */
+.live{display:grid;grid-template-columns:minmax(0,1fr) 340px;flex:1;min-height:0}
+#tab-live[hidden]{display:none!important}
+.steps{display:flex;gap:4px;overflow-x:auto;padding-block:8px;padding-inline:16px;background:var(--surface);border-bottom:1px solid var(--rule);flex:0 0 auto}
+.steps:empty{display:none}
+.st{flex:1 1 auto;min-width:max-content;overflow:hidden;border:1px solid var(--rule);background:var(--surface);border-radius:8px;padding:5px 7px;text-align:left;font-size:12.5px;font-weight:600;line-height:1.15;min-height:44px;white-space:nowrap;text-overflow:ellipsis;display:flex;flex-direction:column;justify-content:center;gap:2px}
+.st small{font-family:var(--f-mono);font-size:9.5px;font-weight:400;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.st span{overflow:hidden;text-overflow:ellipsis}
+.st.small{flex-grow:.6}
+.st.done{color:var(--muted);background:var(--surface-2);border-color:transparent}
+.st.cur{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.st.cur small{color:var(--bg);opacity:.75}
+.st.next{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);color:var(--accent)}
+.st.due{border-color:var(--accent);color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,var(--surface))}
+.mapwrap{position:relative;min-width:0;min-height:0;background:var(--map-bg);border-right:1px solid var(--rule)}
+.mapwrap svg{position:absolute;inset:0;width:100%;height:100%;touch-action:none;user-select:none;-webkit-user-select:none}
+.mapctl{position:absolute;right:10px;top:10px;display:flex;flex-direction:column;gap:6px;z-index:2}
+.mapctl button{width:40px;height:40px;border-radius:8px;border:1px solid var(--rule);background:var(--surface);font-size:18px;font-weight:600}
+.maphint{position:absolute;left:10px;bottom:10px;right:60px;z-index:2;font-size:12px;color:var(--muted);font-family:var(--f-mono);pointer-events:none}
+.rail{display:flex;flex-direction:column;min-height:0;background:var(--surface)}
+.rail-scroll{flex:1;min-height:0;overflow:auto;padding:12px 12px 16px;display:flex;flex-direction:column;gap:14px}
+.sec h3{margin-bottom:6px}
+.phases{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.ph{border:1px solid var(--rule);background:var(--surface);border-radius:7px;padding:7px 8px;text-align:left;font-size:13px;font-weight:600;min-height:44px;display:flex;flex-direction:column;justify-content:center}
+.ph small{font-family:var(--f-mono);font-size:11px;font-weight:400;color:var(--muted)}
+.ph.done{color:var(--muted)}
+.ph.cur{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.ph.cur small{color:var(--bg);opacity:.75}
+.ph.next{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.timer{font-family:var(--f-mono);font-size:13px;padding:7px 10px;border-radius:7px;background:var(--surface-2);display:flex;justify-content:space-between;align-items:center;gap:8px}
+.timer.go{background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok)}
+.tasks{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.task{border:1px solid var(--rule);background:var(--surface);border-radius:7px;padding:8px;font-size:13px;font-weight:500;min-height:46px;text-align:left;line-height:1.2}
+.task.on{background:color-mix(in srgb,var(--zone) 16%,var(--surface));border-color:var(--zone);color:var(--zone);font-weight:600}
+.task .grp{display:block;font-size:10px;font-family:var(--f-mono);color:var(--muted);font-weight:400}
+.bigbtn{width:100%;min-height:52px;border-radius:9px;border:1px solid var(--accent);background:color-mix(in srgb,var(--accent) 12%,var(--surface));color:var(--accent);font-weight:700;font-size:15px}
+.inits{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-top:6px}
+.inits button{border:1px solid var(--rule);background:var(--surface);border-radius:7px;min-height:42px;font-size:12px;font-weight:600;padding:4px}
+.inits-head{font-size:12px;color:var(--accent);font-weight:600;margin-top:8px}
+.probes{display:grid;grid-template-columns:repeat(4,1fr);gap:5px}
+.probes button{border:1px solid var(--rule);background:var(--surface);border-radius:7px;min-height:44px;font-weight:700;font-size:13px}
+.probes button.done{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 50%,transparent)}
+.probes button.due{border-color:var(--accent);color:var(--accent)}
+.log{font-family:var(--f-mono);font-size:12px;display:flex;flex-direction:column;gap:2px}
+.log div{display:grid;grid-template-columns:62px minmax(0,1fr) auto;gap:6px;align-items:center;padding:3px 0;border-bottom:1px dashed var(--rule)}
+.log div.void{opacity:.4;text-decoration:line-through}
+.log .t{color:var(--muted)}
+.log .x{border:0;background:transparent;color:var(--muted);font-size:14px;width:28px;height:24px}
+.railfoot{display:flex;gap:6px;padding:10px 12px;border-top:1px solid var(--rule);background:var(--surface)}
+.railfoot .btn{flex:1}
+.notebox{display:flex;gap:6px}
+.notebox input{flex:1;min-width:0;min-height:42px;border:1px solid var(--rule);border-radius:var(--r);padding:6px 10px;background:var(--surface)}
+.blocker{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:color-mix(in srgb,var(--bg) 85%,transparent);z-index:5;padding:16px}
+.blocker .panel{max-width:420px;text-align:center}
+
+/* svg map */
+.z{fill:var(--map-zone);stroke:var(--map-edge);stroke-width:1.2;vector-effect:non-scaling-stroke}
+.z.cur{fill:color-mix(in srgb,var(--zone) 30%,var(--map-zone));stroke:var(--zone);stroke-width:2.5}
+.z.sel{stroke:var(--accent);stroke-width:3}
+.z.room{fill:#cfd4d8;stroke:#9aa3aa;stroke-dasharray:4 3}
+.has-img .z.room{fill-opacity:.45}
+.z.room.cur{fill:color-mix(in srgb,var(--zone) 30%,#cfd4d8);stroke:var(--zone);stroke-dasharray:none}
+.zl.room{font-weight:500;font-style:italic;fill:var(--muted)}
+#sheetCard .sub{max-width:none}
+.has-img .z{fill-opacity:.35}
+.has-img .z.cur{fill-opacity:.5}
+.zl{fill:var(--ink);font-family:var(--f-sans);font-weight:600;text-anchor:middle;dominant-baseline:middle;pointer-events:none;paint-order:stroke;stroke:var(--map-bg);stroke-width:3px;stroke-linejoin:round}
+.zl.cur{fill:var(--zone)}
+.ln .hit{stroke:transparent;stroke-width:34;stroke-linecap:round;vector-effect:non-scaling-stroke;pointer-events:stroke}
+.ln .vis{stroke-width:5;stroke-linecap:round;vector-effect:non-scaling-stroke;pointer-events:none}
+.ln.threshold .vis{stroke:var(--accent)}
+.ln.open .vis{stroke:var(--open);stroke-dasharray:7 6}
+.timer.warn{border-color:var(--danger,#c0392b)!important;color:var(--danger,#c0392b)}
+.ln.dim .vis{opacity:.28}
+.ln.off .vis{opacity:.12}
+.ln.off .hit{pointer-events:none}
+.ln.walkdoor .vis{stroke:#d2461e;stroke-width:13;animation:wdp 1.2s ease-in-out infinite}
+@keyframes wdp{50%{stroke-width:7}}
+.ln.active .vis{stroke-width:9}
+.ln.sel .vis{stroke-width:10;filter:drop-shadow(0 0 3px var(--accent))}
+.ln.flash .vis{stroke:var(--ok)}
+.ln.bad .vis{stroke:var(--danger)}
+.ll{font-family:var(--f-mono);font-weight:600;text-anchor:middle;dominant-baseline:middle;pointer-events:none;paint-order:stroke;stroke:var(--map-bg);stroke-width:3px}
+.ll.threshold{fill:var(--accent)} .ll.open{fill:var(--open)}
+.ll.dim{opacity:.35}
+.draftln{fill:none;stroke:var(--warn);stroke-width:2.5;stroke-dasharray:6 4;vector-effect:non-scaling-stroke}
+.draftpt{fill:var(--warn);stroke:var(--map-bg);stroke-width:2;vector-effect:non-scaling-stroke}
+
+/* geometry editor */
+.geo{display:grid;grid-template-columns:minmax(0,1fr) 360px;height:100%}
+.tools{display:grid;grid-template-columns:repeat(2,1fr);gap:5px}
+.tools button{border:1px solid var(--rule);background:var(--surface);border-radius:7px;min-height:44px;font-weight:600;font-size:13px;padding:4px 6px}
+.tools button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.help{font-size:13px;padding:8px 10px;border-radius:7px;background:color-mix(in srgb,var(--warn) 14%,transparent);color:var(--ink)}
+.items{font-size:13px;display:flex;flex-direction:column;gap:2px;max-height:220px;overflow:auto}
+.items button{display:flex;justify-content:space-between;gap:8px;text-align:left;border:0;background:transparent;padding:5px 6px;border-radius:5px}
+.items button:hover{background:var(--surface-2)}
+.items .k{font-family:var(--f-mono);font-size:11px;color:var(--muted)}
+.issue{color:var(--danger)}
+.seg{display:inline-flex;border:1px solid var(--rule);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:var(--surface);padding:8px 12px;font-weight:600;font-size:13px;min-height:40px}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+
+/* export */
+.stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px}
+.stat{padding:10px 12px;border-radius:8px;background:var(--surface-2)}
+.stat b{display:block;font-family:var(--f-mono);font-size:22px;font-variant-numeric:tabular-nums}
+.stat span{font-size:12px;color:var(--muted)}
+.arch{display:flex;flex-direction:column;gap:8px}
+.arch .item{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 12px;border:1px solid var(--rule);border-radius:8px}
+.arch .item .meta{flex:1;min-width:180px}
+.confirm{display:inline-flex;gap:6px;align-items:center;font-size:13px}
+
+/* overlays */
+#sync{position:fixed;inset:0;z-index:50;background:#000;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;padding:16px}
+#sync.flip{background:#fff;color:#000}
+#sync .n{font-family:var(--f-mono);font-size:min(16vw,140px);font-weight:600;letter-spacing:.04em}
+#sync .t{font-family:var(--f-mono);font-size:min(9vw,72px);font-variant-numeric:tabular-nums}
+#sync p{font-size:16px;opacity:.75;margin:0}
+#sheet{position:fixed;inset:0;z-index:40;background:rgb(0 0 0/.45);display:flex;align-items:flex-end;justify-content:center}
+#sheet.locked{background:rgb(0 0 0/.85)}
+#sheet.locked .card{max-height:100%;height:100%;border-radius:0;width:100%}
+.obsx{margin-left:auto;font-size:12px;opacity:.55}
+#sheet .card{background:var(--surface);width:min(860px,100%);max-height:92%;overflow:auto;border-radius:14px 14px 0 0;padding:18px 16px 22px}
+.q{padding:12px 0;border-bottom:1px solid var(--rule)}
+.q p{margin:0 0 8px;font-weight:600}
+.scale{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:3px}
+.scale button{min-width:0;min-height:44px;border:1px solid var(--rule);background:var(--surface);border-radius:6px;font-family:var(--f-mono);font-size:12px;font-weight:600;padding:0 2px}
+.scale button.on{background:var(--zone);color:var(--bg);border-color:var(--zone)}
+.ends{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-top:4px}
+.scale button.na{font-family:var(--f-sans);font-weight:500;color:var(--muted)}
+.scale button.na.on{color:var(--bg)}
+.kss{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:3px}
+.kss button{text-align:center;min-height:64px;border:1px solid var(--rule);background:var(--surface);border-radius:6px;padding:4px 3px;font-size:10.5px;line-height:1.2;min-width:0;display:flex;flex-direction:column;align-items:center;gap:3px}
+.kss button b{font-family:var(--f-mono);font-size:13px}
+.kss button.on{background:var(--zone);color:var(--bg);border-color:var(--zone)}
+.zrow{display:grid;grid-template-columns:minmax(120px,180px) minmax(0,1fr);gap:10px;align-items:center;padding:6px 0;border-bottom:1px dashed var(--rule)}
+#toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:60;background:var(--ink);color:var(--bg);padding:10px 14px;border-radius:9px;font-size:14px;display:flex;gap:12px;align-items:center;max-width:calc(100% - 32px);box-shadow:0 6px 20px rgb(0 0 0/.25)}
+#toast.warn{background:var(--warn);color:#fff}
+#toast button{border:0;background:transparent;color:inherit;font-weight:700;text-decoration:underline;min-height:32px}
+
+@media (max-width:860px){
+  .live,.geo{grid-template-columns:1fr;grid-template-rows:minmax(300px,55%) minmax(0,1fr)}
+  .mapwrap{border-right:0;border-bottom:1px solid var(--rule)}
+  .tabs button{padding:7px 10px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div id="app">
+  <header class="bar">
+    <div class="brand"><b>Field logger</b><span>shadowing</span></div>
+    <div class="status" id="status"></div>
+    <div class="clock" id="clock">--:--:--</div>
+    <nav class="tabs" role="tablist">
+      <button role="tab" data-tab="session" aria-selected="true">Session</button>
+      <button role="tab" data-tab="live" aria-selected="false">Live</button>
+      <button role="tab" data-tab="export" aria-selected="false">Export</button>
+      <button role="tab" data-tab="geometry" aria-selected="false">Geometry</button>
+    </nav>
+  </header>
+  <main>
+    <section class="tab" id="tab-session"></section>
+    <section class="tab" id="tab-live" hidden style="display:flex;flex-direction:column">
+      <nav class="steps" id="steps" aria-label="Session steps"></nav>
+      <div class="live">
+        <div class="mapwrap" id="liveWrap">
+          <svg id="liveMap" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet"></svg>
+          <div class="mapctl"><button data-zoom="in" aria-label="Zoom in">+</button><button data-zoom="out" aria-label="Zoom out">−</button><button data-zoom="fit" aria-label="Fit map">⤢</button></div>
+          <div class="maphint" id="liveHint"></div>
+          <div class="blocker" id="liveBlock" hidden><div class="panel"><h2>No session running</h2><p class="sub" style="margin:8px 0 14px">Fill in the session details and start the session first.</p><button class="btn primary" data-goto="session">Go to session</button></div></div>
+        </div>
+        <aside class="rail">
+          <div class="rail-scroll" id="rail"></div>
+          <div class="railfoot">
+            <button class="btn" id="btnSync">Extra sync</button>
+            <button class="btn" id="btnFix">Correct zone</button>
+            <button class="btn" id="btnUndo">Undo</button>
+          </div>
+        </aside>
+      </div>
+    </section>
+    <section class="tab" id="tab-export" hidden></section>
+    <section class="tab" id="tab-geometry" hidden>
+      <div class="geo">
+        <div class="mapwrap" id="geoWrap">
+          <svg id="geoMap" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet"></svg>
+          <div class="mapctl"><button data-zoom="in" aria-label="Zoom in">+</button><button data-zoom="out" aria-label="Zoom out">−</button><button data-zoom="fit" aria-label="Fit map">⤢</button></div>
+          <div class="maphint" id="geoHint"></div>
+        </div>
+        <aside class="rail"><div class="rail-scroll" id="geoRail"></div></aside>
+      </div>
+    </section>
+  </main>
+</div>
+<div id="sync" hidden><div class="n" id="syncN">SYNC 1</div><div class="t" id="syncT"></div><p>Turn this screen towards the participant and hold it about 50 cm from their face for 2 seconds. Then tap to close.</p></div>
+<div id="sheet" hidden><div class="card" id="sheetCard"></div></div>
+<div id="toast" hidden></div>
+<input type="file" id="fileGeo" accept=".json,application/json" hidden>
+<input type="file" id="fileImg" accept="image/png,image/jpeg,image/webp" hidden>
+
+<script src="config.js"></script>
+<script>
+(() => {
+"use strict";
+const APP_VERSION = "1.0.0";
+/* ---------------- Study configuration: everything study-specific is in config.js ---------------- */
+const {
+  DISPLAY_NAMES, ROLES, TASKS, TASK_NONE, SHIFTS, INITIATORS, PLACES, SESSION_NUMBERS, SHIFT_PHASES, NO_AREA,
+  CODE_PATTERN, CODE_EXAMPLE, EXPECTED_EXPOSURE, ACCLIM_MIN, PROBE_MINS, PROBE_GAP_MIN, PROBE_OVERDUE_MIN,
+  PROBE_ITEMS, ZONE_ITEM, FAMILIAR_ITEM, CONSENT, CHECKLIST, INVENTORY, WALK, PAUSE_S, TARGET_DIST, LABEL_HINTS, DEFAULT_GEO,
+} = window.FIELD_LOGGER_CONFIG;
+const disp = n => DISPLAY_NAMES[n] ?? n;
+const LS_STATE = "field_logger_state_v1";
+const LS_GEO = "field_logger_geo_v1";
+const byName = (a, b) => a.name.localeCompare(b.name, "en", { numeric: true, sensitivity: "base" });
+const PHASES = [
+  { id: "acc1", label: "5-dot test 1" },
+  { id: "acclim", label: "Acclimatisation", mins: ACCLIM_MIN },
+  { id: "work", label: "Natural work" },
+  { id: "walk", label: "Walk-through" },
+  { id: "acc2", label: "5-dot test 2" },
+  { id: "end", label: "Session end" },
+];
+const $ = (s, r = document) => r.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const pad = n => String(n).padStart(2, "0");
+const hms = t => { const d = new Date(t); return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; };
+const hmsms = t => { const d = new Date(t); return hms(t) + "." + String(d.getMilliseconds()).padStart(3, "0"); };
+const mmss = s => { s = Math.max(0, Math.round(s)); return `${pad(Math.floor(s / 60))}:${pad(s % 60)}`; };
+const uid = p => p + "-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+function lsGet(k) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch { return null; } }
+function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch { return false; } }
+function csvCell(v) { if (v == null) return ""; const s = String(v); return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
+function toCsv(cols, rows) { return [cols.join(","), ...rows.map(r => cols.map(c => csvCell(r[c])).join(","))].join("\n"); }
+
+function pip(pt, poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const xi = poly[i].x, yi = poly[i].y, xj = poly[j].x, yj = poly[j].y;
+    if (((yi > pt.y) !== (yj > pt.y)) && pt.x < ((xj - xi) * (pt.y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+function zoneAtPoint(p) { for (let i = geo.zones.length - 1; i >= 0; i--) if (geo.zones[i].points.length > 2 && pip(p, geo.zones[i].points)) return geo.zones[i].id; return ""; }
+function centroid(pts) {
+  let a = 0, cx = 0, cy = 0;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) { const f = pts[j].x * pts[i].y - pts[i].x * pts[j].y; a += f; cx += (pts[j].x + pts[i].x) * f; cy += (pts[j].y + pts[i].y) * f; }
+  if (Math.abs(a) < 1e-6) return { x: pts.reduce((s, p) => s + p.x, 0) / pts.length, y: pts.reduce((s, p) => s + p.y, 0) / pts.length };
+  return { x: cx / (3 * a), y: cy / (3 * a) };
+}
+/* Zone label positions: the most interior points of each area (not the centroid, which can fall outside an
+   L-shaped area), picked greedily so that label boxes at the fitted view do not overlap. */
+let layoutCache = { sig: null, pos: {} };
+function segDist(p, a, b) { const dx = b.x - a.x, dy = b.y - a.y, L = dx * dx + dy * dy || 1; let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / L; t = Math.max(0, Math.min(1, t)); return Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy); }
+function labelLayout() {
+  const sig = geo.zones.map(z => z.id + z.name + z.points.length + (z.points[0]?.x || 0)).join("|") + geo.width;
+  if (layoutCache.sig === sig) return layoutCache.pos;
+  const fs = geo.width * 1.06 / 98, placed = [], pos = {};
+  const boxOf = (z, p) => { const w = disp(z.name).length * fs * 0.56 + fs * 0.4, hh = fs * 1.25; return { x0: p.x - w / 2, x1: p.x + w / 2, y0: p.y - hh / 2, y1: p.y + hh / 2 }; };
+  const hit = (a, b) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+  const cands = {};
+  for (const z of geo.zones) {
+    if (z.points.length < 3) continue;
+    const xs = z.points.map(p => p.x), ys = z.points.map(p => p.y), x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+    const step = Math.max((x1 - x0), (y1 - y0)) / 40, list = [];
+    for (let x = x0 + step / 2; x < x1; x += step) for (let y = y0 + step / 2; y < y1; y += step) {
+      const p = { x, y }; if (!pip(p, z.points)) continue;
+      let d = Infinity; for (let i = 0, j = z.points.length - 1; i < z.points.length; j = i++) d = Math.min(d, segDist(p, z.points[j], z.points[i]));
+      list.push({ p, d });
+    }
+    list.sort((a, b) => b.d - a.d);
+    const hint = LABEL_HINTS[z.name.toLowerCase()];
+    if (hint && list.length) {
+      const keep = list.filter(c => c.d >= list[0].d * 0.55); keep.sort((a, b) => a.p.y - b.p.y);
+      if (hint === "top-right" && keep.length) { const y0 = keep[0].p.y; const band = keep.filter(c => c.p.y <= y0 + step * 1.5).sort((a, b) => b.p.x - a.p.x); cands[z.id] = band.concat(keep, list).slice(0, 120); }
+      else cands[z.id] = keep.concat(list).slice(0, 80);
+    }
+    else cands[z.id] = list.slice(0, 80);
+  }
+  const order = geo.zones.filter(z => cands[z.id]?.length).sort((a, b) => (cands[a.id][0].d) - (cands[b.id][0].d));
+  for (const z of order) {
+    let best = cands[z.id][0].p;
+    for (const c of cands[z.id]) { const b = boxOf(z, c.p); if (!placed.some(q => hit(q, b))) { best = c.p; break; } }
+    pos[z.id] = best; placed.push(boxOf(z, best));
+  }
+  layoutCache = { sig, pos }; return pos;
+}
+function detectSides(l) {
+  const mx = (l.a.x + l.b.x) / 2, my = (l.a.y + l.b.y) / 2;
+  const dx = l.b.x - l.a.x, dy = l.b.y - l.a.y, len = Math.hypot(dx, dy) || 1;
+  const nx = -dy / len, ny = dx / len, d = Math.max(geo.width, geo.height) * 0.012;
+  return [zoneAtPoint({ x: mx + nx * d, y: my + ny * d }), zoneAtPoint({ x: mx - nx * d, y: my - ny * d })];
+}
+
+/* ---------------- Geometry ---------------- */
+function rect(x, y, w, h) { return [{ x, y }, { x: x + w, y }, { x: x + w, y: y + h }, { x, y: y + h }]; }
+let geo = null;
+{ const st = lsGet(LS_GEO); geo = (st && !st.example && !st.imageMissing && !(st.builtin && st.rev !== DEFAULT_GEO.rev)) ? st : structuredClone(DEFAULT_GEO); }
+let geoStored = true;
+function saveGeo() { geoStored = lsSet(LS_GEO, geo); if (!geoStored) { const lite = { ...geo, image: null, imageMissing: !!geo.image }; lsSet(LS_GEO, lite); } }
+const zoneById = id => geo.zones.find(z => z.id === id);
+const isRoom = z => !!z && z.kind === "room";
+const isPassage = z => !!z && z.kind === "passage";
+const analysisZones = () => geo.zones.filter(z => !isRoom(z));
+const zoneName = id => zoneById(id)?.name || (id ? "?" : "—");
+const zoneLabel = id => disp(zoneName(id));
+function geoSignature() { let h = 0; const s = JSON.stringify({ z: geo.zones.map(z => [z.id, z.points]), l: geo.lines.map(l => [l.id, l.type, l.a, l.b, l.zones]) }); for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return (h >>> 0).toString(16); }
+function geoIssues() {
+  const out = [];
+  geo.lines.forEach(l => { if (!l.zones[0] || !l.zones[1]) out.push(`${l.name}: zone missing on one side`); else if (l.zones[0] === l.zones[1]) out.push(`${l.name}: same zone on both sides`); });
+  geo.zones.forEach(z => { if (!geo.lines.some(l => l.zones.includes(z.id))) out.push(`${z.name}: no door or boundary leads into it`); });
+  return out;
+}
+
+/* ---------------- Session state ---------------- */
+function blankSession() {
+  return { id: uid("S"), created: Date.now(), started: null, ended: null,
+    meta: { participant: "", role: "", sessionNo: "1", area: "", shift: "", shiftLong: false, shiftPhase: "", shiftStart: "", observer: "", startZone: "", notes: "", exposureMs: "", probeMins: [...PROBE_MINS], walkCompletion: "", walkNotes: "" },
+    inventory: null, zone: "", task: "", phase: "", syncN: 0, paused: false, pendingInterruption: null,
+    events: [], ratings: [], lastBackup: null, geometry: null };
+}
+const store = lsGet(LS_STATE) || { session: blankSession(), archive: [] };
+store.study = { exposureMs: "", ...(store.study || {}), probeMins: [...PROBE_MINS] };
+store.consents = store.consents || [];
+let S = store.session;
+let saveTimer = null;
+function persist() { clearTimeout(saveTimer); saveTimer = setTimeout(() => { if (!lsSet(LS_STATE, store)) toast("This device could not save the session. Export it now.", "warn"); }, 150); }
+
+function logEvent(type, f = {}) {
+  const t = Date.now();
+  const ev = { seq: S.events.length + 1, t, iso: new Date(t).toISOString(), type, phase: S.phase, zone: S.zone, void: false, ...f };
+  S.events.push(ev); persist(); return ev;
+}
+// Natural-work minutes up to time t: time in the "work" phase, minus time outside the mapped areas.
+// Not reset by returning to "work" after the walk-through.
+function workMinutes(t = Date.now()) {
+  let ph = "", out = false, last = null, acc = 0;
+  for (const e of S.events) { if (e.void || e.t > t) continue;
+    if (ph === "work" && !out && last != null) acc += e.t - last;
+    if (e.type === "phase") ph = e.phase_to; if (e.type === "leave") out = true; if (e.type === "return") out = false;
+    last = e.t; }
+  if (ph === "work" && !out && last != null) acc += t - last;
+  return acc / 60000;
+}
+function probeEvent(p) { return [...S.events].reverse().find(e => !e.void && e.type === "rating" && e.probe === p) || null; }
+// Due time in natural-work minutes: the planned minute, but never less than the minimum gap after the previous rating.
+function probeDue(p) {
+  const i = ["T1", "T2", "T3"].indexOf(p); if (i < 0) return null;
+  let due = S.meta.probeMins[i];
+  if (i > 0) { const prev = probeEvent(["T1", "T2", "T3"][i - 1]); if (prev) due = Math.max(due, workMinutes(prev.t) + PROBE_GAP_MIN); }
+  return due;
+}
+function phaseStart(id) { const e = [...S.events].reverse().find(e => !e.void && e.type === "phase" && e.phase_to === id); return e ? e.t : null; }
+function lastLive() { for (let i = S.events.length - 1; i >= 0; i--) if (!S.events[i].void) return S.events[i]; return null; }
+
+/* ---------------- Toast ---------------- */
+let toastTimer;
+function toast(msg, kind = "", action = null) {
+  const el = $("#toast"); el.className = kind; el.innerHTML = `<span>${esc(msg)}</span>`;
+  if (action) { const b = document.createElement("button"); b.textContent = action.label; b.onclick = () => { action.fn(); el.hidden = true; }; el.appendChild(b); }
+  el.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => el.hidden = true, action ? 5000 : 3200);
+}
+
+/* ---------------- Files ---------------- */
+async function saveFile(name, text) {
+  try {
+    const blob = new Blob([text], { type: name.endsWith(".csv") ? "text/csv" : name.endsWith(".html") ? "text/html" : "application/json" });
+    const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 2000); return true;
+  } catch (e) { toast("Saving files is not possible in this view", "warn"); return false; }
+}
+
+/* ---------------- Map rendering + gestures ---------------- */
+const views = { live: { vb: null }, geo: { vb: null } };
+function fitVB(which) {
+  const svg = which === "live" ? $("#liveMap") : $("#geoMap"); const r = svg.getBoundingClientRect();
+  const w = geo.width, h = geo.height, m = Math.max(w, h) * 0.03; let W = w + 2 * m, H = h + 2 * m;
+  const ar = (r.width || 4) / (r.height || 3);
+  if (W / H > ar) H = W / ar; else W = H * ar;
+  views[which].vb = [w / 2 - W / 2, h / 2 - H / 2, W, H];
+}
+function zoomBy(which, f, cx, cy) {
+  const v = views[which].vb; if (!v) return;
+  const full = Math.max(geo.width, geo.height) * 1.6;
+  const nw = Math.min(full, Math.max(full / 14, v[2] * f)); const k = nw / v[2];
+  if (cx == null) { cx = v[0] + v[2] / 2; cy = v[1] + v[3] / 2; }
+  views[which].vb = [cx - (cx - v[0]) * k, cy - (cy - v[1]) * k, v[2] * k, v[3] * k];
+}
+function svgPoint(svg, x, y) { const p = new DOMPoint(x, y).matrixTransform(svg.getScreenCTM().inverse()); return { x: p.x, y: p.y }; }
+
+function renderMap(which) {
+  const svg = which === "live" ? $("#liveMap") : $("#geoMap");
+  if (!views[which].vb) fitVB(which);
+  const v = views[which].vb; svg.setAttribute("viewBox", v.join(" "));
+  svg.classList.toggle("has-img", !!geo.image);
+  const fs = v[2] / 98, lfs = v[2] / 95; const lay = labelLayout();
+  const live = which === "live";
+  const wd = live ? walkDoor() : null;
+  const cur = live ? S.zone : "";
+  let h = `<rect x="${-geo.width}" y="${-geo.height}" width="${geo.width * 3}" height="${geo.height * 3}" fill="var(--map-bg)"/>`;
+  if (geo.image) h += `<image href="${geo.image}" x="0" y="0" width="${geo.width}" height="${geo.height}" preserveAspectRatio="none" style="pointer-events:none"/>`;
+  else h += `<rect x="0" y="0" width="${geo.width}" height="${geo.height}" fill="none" stroke="var(--rule)" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/>`;
+  for (const z of geo.zones) {
+    if (z.points.length < 3) continue;
+    const cls = ["z", isRoom(z) ? "room" : "", z.id === cur ? "cur" : "", !live && G.sel?.kind === "zone" && G.sel.id === z.id ? "sel" : ""].join(" ");
+    h += `<polygon class="${cls}" data-zone="${z.id}" points="${z.points.map(p => p.x + "," + p.y).join(" ")}"/>`;
+  }
+  for (const z of geo.zones) { if (z.points.length < 3) continue; const c = lay[z.id] || centroid(z.points); h += `<text class="zl ${isRoom(z) ? "room" : ""} ${z.id === cur ? "cur" : ""}" x="${c.x}" y="${c.y}" font-size="${isRoom(z) ? fs * 0.62 : fs}">${esc(disp(z.name))}</text>`; }
+  for (const l of geo.lines) {
+    const active = live && l.zones.includes(cur);
+    const bad = !l.zones[0] || !l.zones[1] || l.zones[0] === l.zones[1];
+    const cls = ["ln", l.type, live ? (wd && l.id === wd.id ? "active walkdoor" : active ? "active" : "dim") : "", !live && G.sel?.kind === "line" && G.sel.id === l.id ? "sel" : "", !live && bad ? "bad" : "", flashId === l.id ? "flash" : ""].join(" ");
+    h += `<g class="${cls}" data-line="${l.id}"><line class="hit" x1="${l.a.x}" y1="${l.a.y}" x2="${l.b.x}" y2="${l.b.y}"/><line class="vis" x1="${l.a.x}" y1="${l.a.y}" x2="${l.b.x}" y2="${l.b.y}"/></g>`;
+  }
+  for (const l of geo.lines) {
+    const active = live && l.zones.includes(cur);
+    if (live && (!active || v[2] > geo.width * 0.7)) continue;
+    const dx = l.b.x - l.a.x, dy = l.b.y - l.a.y, len = Math.hypot(dx, dy) || 1, off = lfs * 1.4;
+    h += `<text class="ll ${l.type}" x="${(l.a.x + l.b.x) / 2 + (-dy / len) * off}" y="${(l.a.y + l.b.y) / 2 + (dx / len) * off}" font-size="${lfs}">${esc(l.name)}</text>`;
+  }
+  if (!live && G.draft.length) {
+    const pts = [...G.draft, ...(G.hover ? [G.hover] : [])];
+    h += `<polyline class="draftln" points="${pts.map(p => p.x + "," + p.y).join(" ")}"/>`;
+    G.draft.forEach((p, i) => h += `<circle class="draftpt" cx="${p.x}" cy="${p.y}" r="${v[2] / (i === 0 ? 130 : 180)}"/>`);
+  }
+  if (live && S.phase === "walk" && geo.builtin) h += walkOverlay(v[2] / 90, zoneLabel(cur));
+  svg.innerHTML = h;
+}
+function walkOverlay(r, curName) {
+  const p = walkPlan(); if (!walkRoute()) return "";
+  const running = S.phase === "walk"; const done = running ? walkPausesDone() : new Map(); const nx = running ? walkNext() : null;
+  const mid = l => ({ x: (l.a.x + l.b.x) / 2, y: (l.a.y + l.b.y) / 2 });
+  const pts = []; p.moves.forEach(m => { if (m.line) pts.push(mid(m.line)); if (m.stop) pts.push({ x: m.stop.x, y: m.stop.y }); });
+  let h = `<g style="pointer-events:none"><polyline points="${pts.map(q => q.x + "," + q.y).join(" ")}" fill="none" stroke="#d2461e" stroke-width="${r / 2.6}" stroke-linejoin="round" stroke-linecap="round" opacity=".85"/>`;
+  const st = pts[0];
+  h += `<rect x="${st.x - r * 1.6}" y="${st.y - r * 2.6}" width="${r * 3.2}" height="${r * 1.3}" rx="${r * .3}" fill="#16212b"/><text x="${st.x}" y="${st.y - r * 1.65}" font-size="${r * .9}" fill="#fff" text-anchor="middle" font-family="sans-serif" font-weight="700">START</text><circle cx="${st.x}" cy="${st.y}" r="${r / 2.5}" fill="#16212b"/>`;
+  p.stops.forEach(s => { const isNext = nx && nx.target && nx.target.pid === s.pid, isDone = done.has(s.pid);
+    const fill = isNext ? "#d2461e" : isDone ? "#8a96a3" : s.pause_only ? "#7a7a7a" : "#1f5fbf";
+    h += `<circle cx="${s.x}" cy="${s.y}" r="${isNext ? r * 1.25 : r}" fill="${fill}" stroke="#fff" stroke-width="${r / 4}"/><text x="${s.x}" y="${s.y}" font-size="${r * 1.05}" fill="#fff" text-anchor="middle" dominant-baseline="central" font-family="sans-serif" font-weight="700">${s.order}</text>`; });
+  return h + `</g>`;
+}
+function walkMap() {
+  if (!geo.builtin) return `<p class="note">Route map needs the built-in floor plan.</p>`;
+  let h = `<svg viewBox="0 0 ${geo.width} ${geo.height}" style="width:100%;height:auto;display:block;margin:6px 0 12px;border:1px solid var(--rule);border-radius:8px;background:#fff">`;
+  if (geo.image) h += `<image href="${geo.image}" x="0" y="0" width="${geo.width}" height="${geo.height}" opacity="0.6"/>`;
+  for (const z of analysisZones()) if (z.points.length > 2) h += `<polygon points="${z.points.map(p => p.x + "," + p.y).join(" ")}" fill="#2f7fbf" fill-opacity="0.08" stroke="#2f7fbf" stroke-opacity=".5" stroke-width="2"/>`;
+  return h + walkOverlay(geo.width / 85, "") + `</svg>`;
+}
+
+function attachGestures(svg, which, onTap, onHover) {
+  const pts = new Map(); let start = null, moved = false, pinch = null;
+  svg.addEventListener("pointerdown", e => {
+    try { svg.setPointerCapture(e.pointerId); } catch {}
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pts.size === 1) { start = { x: e.clientX, y: e.clientY, vb: [...views[which].vb] }; moved = false; pinch = null; }
+    if (pts.size === 2) {
+      const [a, b] = [...pts.values()]; const r = svg.getBoundingClientRect();
+      pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), vb: [...views[which].vb], fx: ((a.x + b.x) / 2 - r.left) / r.width, fy: ((a.y + b.y) / 2 - r.top) / r.height };
+      moved = true;
+    }
+  });
+  svg.addEventListener("pointermove", e => {
+    if (!pts.has(e.pointerId)) { if (onHover && e.pointerType === "mouse") onHover(e); return; }
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const r = svg.getBoundingClientRect();
+    if (pts.size >= 2 && pinch) {
+      const [a, b] = [...pts.values()]; const d = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+      const full = Math.max(geo.width, geo.height) * 1.6;
+      const nw = Math.min(full, Math.max(full / 14, pinch.vb[2] * pinch.d / d)); const k = nw / pinch.vb[2]; const nh = pinch.vb[3] * k;
+      const cx = pinch.vb[0] + pinch.fx * pinch.vb[2], cy = pinch.vb[1] + pinch.fy * pinch.vb[3];
+      const mfx = ((a.x + b.x) / 2 - r.left) / r.width, mfy = ((a.y + b.y) / 2 - r.top) / r.height;
+      views[which].vb = [cx - mfx * nw, cy - mfy * nh, nw, nh]; renderMap(which);
+    } else if (pts.size === 1 && start) {
+      const dx = e.clientX - start.x, dy = e.clientY - start.y;
+      if (!moved && Math.hypot(dx, dy) > 10) moved = true;
+      if (moved) { const s = start.vb[2] / r.width; views[which].vb = [start.vb[0] - dx * s, start.vb[1] - dy * s, start.vb[2], start.vb[3]]; renderMap(which); }
+    }
+  });
+  const end = e => {
+    if (!pts.has(e.pointerId)) return; pts.delete(e.pointerId);
+    if (pts.size === 0) { if (!moved && start && e.type === "pointerup") onTap(e); start = null; pinch = null; }
+    else if (pts.size === 1) { const [q] = pts.values(); start = { x: q.x, y: q.y, vb: [...views[which].vb] }; pinch = null; }
+  };
+  svg.addEventListener("pointerup", end); svg.addEventListener("pointercancel", end);
+  svg.addEventListener("wheel", e => { e.preventDefault(); const p = svgPoint(svg, e.clientX, e.clientY); zoomBy(which, e.deltaY > 0 ? 1.15 : 1 / 1.15, p.x, p.y); renderMap(which); }, { passive: false });
+}
+function zoneAt(e) { for (const el of document.elementsFromPoint(e.clientX, e.clientY)) { const z = el.closest && el.closest("[data-zone]"); if (z) return z; } return null; }
+function hitAt(e, sel) {
+  const svg = e.currentTarget; const prev = svg.style.pointerEvents;
+  const el = document.elementFromPoint(e.clientX, e.clientY); return el && el.closest ? el.closest(sel) : null;
+}
+document.querySelectorAll(".mapctl").forEach(ctl => ctl.addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return; const which = ctl.parentElement.id === "liveWrap" ? "live" : "geo";
+  if (b.dataset.zoom === "fit") fitVB(which); else zoomBy(which, b.dataset.zoom === "in" ? 1 / 1.4 : 1.4);
+  renderMap(which);
+}));
+new ResizeObserver(() => { fitVB("live"); if (!$("#tab-live").hidden) renderMap("live"); }).observe($("#liveWrap"));
+new ResizeObserver(() => { fitVB("geo"); if (!$("#tab-geometry").hidden) renderMap("geo"); }).observe($("#geoWrap"));
+
+/* ---------------- Live logging ---------------- */
+let flashId = null;
+function liveTap(e) {
+  if (!S.started || S.ended) return;
+  if (S.outside) {
+    const zEl = hitAt(e, "[data-zone]") || null; const lnEl = hitAt(e, "[data-line]");
+    let to = zEl?.dataset.zone; if (!to && lnEl) return toast("The participant is outside the mapped areas. Tap the area they come back into.", "warn");
+    if (!to) return;
+    logEvent("return", { from_zone: "", to_zone: to, place: S.outside.place }); S.zone = to; S.outside = null;
+    toast(`Back in ${zoneLabel(to)} from ${placeLabel(S.events.at(-1).place)}`, "", { label: "Undo", fn: undo }); return renderLive();
+  }
+  let g = hitAt(e, "[data-line]");
+  if (g && isRoom(zoneById(S.zone))) g = null; // in a room: a tap near a door means the area they go into
+  if (!g) {
+    const zEl = zoneAt(e); if (!zEl) return;
+    const to = zEl.dataset.zone; const tz = zoneById(to), cz = zoneById(S.zone);
+    if (to === S.zone || !(isRoom(tz) || isRoom(cz))) return;
+    const from = S.zone; S.zone = to; const rev = logEvent("room", { from_zone: from, to_zone: to }); walkReattribute(rev);
+    if (navigator.vibrate) try { navigator.vibrate(25); } catch {}
+    toast(`${isRoom(tz) ? "Into" : "Back to"} ${zoneLabel(to)} (from ${zoneLabel(from)})`, "", { label: "Undo", fn: undo }); return renderLive();
+  }
+  const line = geo.lines.find(l => l.id === g.dataset.line); if (!line) return;
+  const wdoor = walkDoor();
+  if (!line.zones.includes(S.zone)) { toast(`${line.name} does not border ${zoneLabel(S.zone)}. If the participant is elsewhere, use Correct zone.`, "warn"); return; }
+  const to = line.zones[0] === S.zone ? line.zones[1] : line.zones[0];
+  if (!to) { toast(`${line.name} has no zone on the other side. Fix it in Geometry.`, "warn"); return; }
+  const from = S.zone; S.zone = to;
+  const wf = S.phase === "walk" ? { walk_expected_line: wdoor ? wdoor.name : "", walk_door_differs: !!(wdoor && wdoor.id !== line.id) } : {};
+  const ev = logEvent(line.type === "threshold" ? "crossing" : "boundary", { from_zone: from, to_zone: to, line_id: line.id, line_name: line.name, line_type: line.type, ...wf });
+  if (wf.walk_door_differs) setTimeout(() => toast(`Logged as a different door from the route (route: ${wdoor.name}).`), 1400);
+  flashId = line.id; setTimeout(() => { flashId = null; renderMap("live"); }, 500);
+  if (navigator.vibrate) try { navigator.vibrate(25); } catch {}
+  toast(`${line.type === "threshold" ? "Crossing" : "Zone change"} ${line.name}: ${zoneLabel(from)} → ${zoneLabel(to)}`, "", { label: "Undo", fn: undo });
+  walkReattribute(ev);
+  renderLive(); void ev;
+}
+// A pause started just before the door tap belongs to the area entered: move it there (logged, undoable).
+const REATTR_S = 8;
+function walkReattribute(cross) {
+  if (S.phase !== "walk" || !S.paused || !cross) return;
+  const ps = [...S.events].reverse().find(e => !e.void && e.type === "pause_start"); if (!ps || ps.reassigned_by) return;
+  if ((cross.t - ps.t) / 1000 > REATTR_S) return;
+  const stp = walkStopForZone(S.zone); if (!stp) return;
+  const done = walkPausesDone(); if (done.has(stp.pid) && done.get(stp.pid) !== ps) return;
+  if (!(ps.repeat || ps.off_route)) return; // only a pause that landed on a done or off-route area is moved
+  Object.assign(ps, { reassigned_from: { pause_zone: ps.pause_zone, pause_id: ps.pause_id, pause_order: ps.pause_order, repeat: ps.repeat, off_route: ps.off_route }, reassigned_by: cross.seq,
+    pause_zone: zoneName(S.zone), pause_id: stp.pid, pause_no: stp.pid, pause_order: stp.order, pause_only: !!stp.pause_only, repeat: false, off_route: false });
+  persist(); setTimeout(() => toast(`Pause moved to point ${stp.order} (${disp(stp.zone)}): the door was tapped just after the pause started.`), 900);
+}
+function setPhase(id) {
+  if (S.phase === id) return;
+  const prev = S.phase; S.phase = id; S.paused = false;
+  logEvent("phase", { phase_from: prev, phase_to: id });
+  if (id === "end") toast("End time logged.");
+  renderLive();
+}
+function setTask(id) {
+  if (S.task === id) return;
+  const list = [...(TASKS[S.meta.role] || []), TASK_NONE]; const t = list.find(x => x.id === id);
+  logEvent("task", { task: id, task_label: t?.label || id, prev_task: S.task }); S.task = id; renderLive();
+}
+function interruption() { const ev = logEvent("interruption", { initiator: "" }); S.pendingInterruption = ev.seq; renderLive(); }
+function setInitiator(id) { const ev = S.events.find(e => e.seq === S.pendingInterruption); if (ev) { ev.initiator = id; persist(); } S.pendingInterruption = null; renderLive(); }
+function togglePause(auto = false) {
+  let f = {};
+  if (S.phase === "walk") {
+    if (!S.paused) {
+      const stp = walkStopForZone(S.zone); const already = stp ? walkPausesDone().has(stp.pid) : false;
+      f = { walk_dir: walkReversed() ? "reverse" : "forward", pause_zone: zoneName(S.zone), pause_id: stp ? stp.pid : 0, pause_no: stp ? stp.pid : 0, pause_order: stp ? stp.order : 0, pause_only: !!stp?.pause_only, pause_s: PAUSE_S, off_route: !stp, repeat: already };
+      if (!stp) toast(`${zoneLabel(S.zone)} has no pause point on the route: the pause is logged as off-route.`, "warn");
+      else if (already) toast(`Point ${stp.order} (${disp(stp.zone)}) was already paused: logged as a repeat.`, "warn");
+    } else {
+      const ps = [...S.events].reverse().find(e => !e.void && e.type === "pause_start");
+      const dur = ps ? (Date.now() - ps.t) / 1000 : null;
+      f = { walk_dir: ps?.walk_dir, pause_zone: ps?.pause_zone, pause_id: ps?.pause_id || 0, pause_no: ps?.pause_no || 0, pause_order: ps?.pause_order || 0, dur_s: dur != null ? Math.round(dur * 10) / 10 : null, auto_end: !!auto, shortened: dur != null && dur < PAUSE_S - 0.5 };
+    }
+  }
+  S.paused = !S.paused;
+  logEvent(S.paused ? "pause_start" : "pause_end", f);
+  if (auto) { beep(880, 250); setTimeout(() => beep(1175, 250), 300); if (navigator.vibrate) try { navigator.vibrate([120, 80, 120]); } catch {} toast(`${PAUSE_S} s done: tell them to continue.`); }
+  renderLive(); }
+function addNote() { const inp = $("#noteIn"); const v = inp.value.trim(); if (!v) return; logEvent("note", { note: v }); inp.value = ""; renderLive(); toast("Note logged"); }
+function undo() {
+  const ev = lastLive();
+  if (!ev || ["session_start", "zone_start"].includes(ev.type)) { toast("Nothing to undo"); return; }
+  ev.void = true;
+  if (["crossing", "boundary", "zone_fix", "room"].includes(ev.type)) { S.zone = ev.from_zone;
+    S.events.forEach(p => { if (p.type === "pause_start" && p.reassigned_by === ev.seq && p.reassigned_from) { Object.assign(p, p.reassigned_from); p.pause_no = p.pause_id; delete p.reassigned_from; delete p.reassigned_by; } }); }
+  if (ev.type === "leave") { S.zone = ev.from_zone; S.outside = null; }
+  if (ev.type === "return") { S.zone = ""; S.outside = { place: ev.place, t: ev.t }; }
+  if (ev.type === "task") S.task = ev.prev_task || "";
+  if (ev.type === "phase") S.phase = ev.phase_from || "";
+  if (ev.type === "pause_start") S.paused = false;
+  if (ev.type === "pause_end") S.paused = true;
+  if (ev.type === "interruption" && S.pendingInterruption === ev.seq) S.pendingInterruption = null;
+  if (ev.type === "rating") S.ratings.forEach(r => { if (r.event_seq === ev.seq) r.void = true; });
+  persist(); toast(`Undone: ${describe(ev)}`); renderLive();
+}
+function voidEvent(seq) { const ev = S.events.find(e => e.seq === seq); if (!ev) return; ev.void = !ev.void; persist(); renderLive(); }
+function describe(e) {
+  switch (e.type) {
+    case "crossing": return `${e.line_name} ${zoneLabel(e.from_zone)} → ${zoneLabel(e.to_zone)}`;
+    case "boundary": return `${e.line_name} (open) ${zoneLabel(e.from_zone)} → ${zoneLabel(e.to_zone)}`;
+    case "zone_fix": return `Correct zone → ${zoneLabel(e.to_zone)}`;
+    case "observer_rating": return `Observer rating (${probeLabel(e.probe)})`;
+    case "rating_start": return `Approached for ${probeLabel(e.probe)}`;
+    case "rating_cancel": return `${probeLabel(e.probe)} cancelled`;
+    case "room": return `Room: ${zoneLabel(e.from_zone)} → ${zoneLabel(e.to_zone)}`;
+    case "acc_dot": return `5-dot ${e.note}`;
+    case "leave": return `Left ${zoneLabel(e.from_zone)} → ${placeLabel(e.place)}`;
+    case "return": return `Back from ${placeLabel(e.place)} → ${zoneLabel(e.to_zone)}`;
+    case "zone_start": return `Start in ${zoneLabel(e.to_zone)}`;
+    case "task": return `Task: ${e.task_label}`;
+    case "interruption": return `Interruption${e.initiator ? " · " + (INITIATORS.find(i => i.id === e.initiator)?.label || e.initiator) : " · initiator?"}`;
+    case "phase": return `Phase: ${PHASES.find(p => p.id === e.phase_to)?.label || e.phase_to}`;
+    case "sync": return `Sync ${e.sync_n}`;
+    case "rating": return probeLabel(e.probe);
+    case "pause_start": return `Pause ${e.pause_order || "?"} start · ${disp(e.pause_zone || "")}${e.off_route ? " (off route)" : e.repeat ? " (repeat)" : ""}`;
+    case "pause_end": return `Pause ${e.pause_order || "?"} end${e.auto_end ? "" : e.shortened ? " (ended early)" : ""}`;
+    case "note": return `Note: ${e.note}`;
+    case "end_check": return `acc2 not logged: ${e.choice === "acc2_first" ? "doing acc2 first" : "finished anyway"}`;
+    case "session_end": return "Session finished";
+    case "session_start": return "Session started";
+    case "walk_start": return `Walk-through started (${e.walk_dir})`;
+    case "walk_completion": return `Walk-through finished: ${e.completion}${e.skipped && e.skipped.length ? " · skipped " + e.skipped.map(disp).join(", ") : ""}`;
+    default: return e.type;
+  }
+}
+
+/* sync */
+let syncTick = null;
+function doSync() {
+  if (!S.started) { toast("Start the session first"); return; }
+  S.syncN += 1; const ev = logEvent("sync", { sync_n: S.syncN });
+  const o = $("#sync"); o.hidden = false; $("#syncN").textContent = "SYNC " + S.syncN;
+  let flip = false; clearInterval(syncTick);
+  syncTick = setInterval(() => { $("#syncT").textContent = hmsms(Date.now()); flip = !flip; o.classList.toggle("flip", flip); }, 250);
+  $("#syncT").textContent = hmsms(ev.t);
+  renderLive();
+}
+$("#sync").addEventListener("click", () => { clearInterval(syncTick); $("#sync").hidden = true; $("#sync").classList.remove("flip"); const id = S.syncN === 1 ? "acc1" : S.syncN === 2 ? "acc2" : null; if (id && !phaseStart(id)) openAccuracy(id); });
+
+/* ---------------- Consent ---------------- */
+function consentFor(code) { return code ? store.consents.find(c => c.participantCode === code) : null; }
+function sigPad(canvas) {
+  const ctx = canvas.getContext("2d"); let drawing = false, has = false;
+  const fit = () => { const r = canvas.getBoundingClientRect(), d = window.devicePixelRatio || 1; canvas.width = r.width * d; canvas.height = r.height * d; ctx.setTransform(d, 0, 0, d, 0, 0); ctx.lineWidth = 2.2; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = "#111"; ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, r.width, r.height); };
+  fit();
+  const pos = e => { const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  canvas.addEventListener("pointerdown", e => { drawing = true; has = true; try { canvas.setPointerCapture(e.pointerId); } catch {} ctx.beginPath(); ctx.moveTo(...pos(e)); });
+  canvas.addEventListener("pointermove", e => { if (!drawing) return; ctx.lineTo(...pos(e)); ctx.stroke(); });
+  const up = () => { drawing = false; }; canvas.addEventListener("pointerup", up); canvas.addEventListener("pointercancel", up);
+  return { clear() { has = false; fit(); }, has: () => has, data: () => canvas.toDataURL("image/png") };
+}
+function openConsent() {
+  const agreed = new Set(); let images = null;
+  openSheet(`<h2>Consent</h2>
+  <p class="note" style="margin:0 0 4px"><b>${esc(CONSENT.title)}</b></p>
+  <p class="note" style="margin:0 0 12px">${esc(CONSENT.ref)} · ${esc(CONSENT.version)} · Participant code <b class="mono">${esc(S.meta.participant)}</b></p>
+  <p class="sub">Hand the tablet to the participant. They tap <b>Agree</b> next to each statement they agree to, then sign.</p>
+  ${CONSENT.items.map((t, i) => `<div class="zrow" style="grid-template-columns:28px minmax(0,1fr) 110px"><b class="mono">${i + 1}</b><span>${esc(t)}</span><button class="btn sm" data-agree="${i}">Agree</button></div>`).join("")}
+  <div class="zrow" style="grid-template-columns:28px minmax(0,1fr) 170px"><b class="mono">${CONSENT.items.length + 1}</b><span>${esc(CONSENT.optional)}</span><div class="seg"><button data-img="yes" aria-pressed="false">Yes</button><button data-img="no" aria-pressed="false">No</button></div></div>
+  <div class="grid-form" style="margin-top:16px">
+    <div class="field"><label class="lbl" for="cName">Participant name</label><input id="cName" autocomplete="off"><span class="lbl" style="margin-top:10px">Participant signature</span><canvas id="cSig" style="width:100%;height:130px;border:1px solid var(--rule);border-radius:8px;touch-action:none;background:#fff"></canvas><button class="btn sm ghost" data-clear="p">Clear</button></div>
+    <div class="field"><label class="lbl" for="cRName">Researcher name</label><input id="cRName" value="${esc(S.meta.observer || "")}" autocomplete="off"><span class="lbl" style="margin-top:10px">Researcher signature</span><canvas id="cRSig" style="width:100%;height:130px;border:1px solid var(--rule);border-radius:8px;touch-action:none;background:#fff"></canvas><button class="btn sm ghost" data-clear="r">Clear</button></div>
+  </div>
+  <p class="note" id="cMissing" style="margin:12px 0 0"></p>
+  <div class="row" style="margin-top:12px"><button class="btn primary" data-csave>Save consent</button><button class="btn" data-close>Cancel</button></div>`);
+  const pP = sigPad($("#cSig")), pR = sigPad($("#cRSig"));
+  const missing = () => { const m = []; const n = CONSENT.items.length - agreed.size; if (n) m.push(`${n} statement${n > 1 ? "s" : ""} not agreed`); if (images === null) m.push("optional statement not answered"); if (!$("#cName").value.trim()) m.push("participant name"); if (!pP.has()) m.push("participant signature"); if (!$("#cRName").value.trim()) m.push("researcher name"); if (!pR.has()) m.push("researcher signature"); return m; };
+  $("#sheetCard").onclick = e => {
+    const a = e.target.closest("[data-agree]"); if (a) { const i = +a.dataset.agree; if (agreed.has(i)) { agreed.delete(i); a.textContent = "Agree"; a.classList.remove("primary"); } else { agreed.add(i); a.textContent = "✓ Agreed"; a.classList.add("primary"); } }
+    const im = e.target.closest("[data-img]"); if (im) { images = im.dataset.img === "yes"; $("#sheetCard").querySelectorAll("[data-img]").forEach(b => b.setAttribute("aria-pressed", b === im)); }
+    const cl = e.target.closest("[data-clear]"); if (cl) (cl.dataset.clear === "p" ? pP : pR).clear();
+    if (e.target.closest("[data-close]")) closeSheet();
+    if (e.target.closest("[data-csave]")) {
+      const m = missing(); if (m.length) { $("#cMissing").textContent = "Still needed: " + m.join(", ") + "."; $("#cMissing").style.color = "var(--danger)"; return; }
+      const rec = { id: uid("C"), participantCode: S.meta.participant, version: CONSENT.version, title: CONSENT.title, ref: CONSENT.ref,
+        statements: CONSENT.items.map((t, i) => ({ n: i + 1, text: t, agreed: agreed.has(i) })), optional: { n: CONSENT.items.length + 1, text: CONSENT.optional, agreed: images },
+        participantName: $("#cName").value.trim(), participantSignature: pP.data(), researcherName: $("#cRName").value.trim(), researcherSignature: pR.data(), signedAt: new Date().toISOString(), exportedAt: null };
+      store.consents.push(rec);
+      S.meta.checklist = { ...(S.meta.checklist || {}), consent: rec.signedAt }; S.meta.imagesConsent = images; S.meta.consentRecordId = rec.id;
+      persist(); saveConsentFile(rec).then(ok => { closeSheet(); toast(ok ? "Consent recorded and saved. Hand the tablet back." : "Consent recorded; the file was not saved: save it from the Export tab.", ok ? "" : "warn"); renderSession(); });
+    }
+  };
+}
+function consentHtml(c) {
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Consent ${esc(c.participantCode)}</title><style>body{font-family:Helvetica,Arial,sans-serif;font-size:12px;max-width:760px;margin:24px auto;color:#000}h1{font-size:18px;margin:0 0 4px}table{border-collapse:collapse;width:100%;margin:14px 0}td,th{border:1px solid #000;padding:6px;vertical-align:top;text-align:left}td.c{text-align:center;width:90px}.sig{display:flex;gap:24px;margin-top:16px}.sig div{flex:1}img{width:100%;border-bottom:1px solid #000}</style></head><body>
+  <h1>Consent Form</h1><p><b>${esc(c.title)}</b><br><i>${esc(c.ref)}</i><br>${esc(c.version)} · signed electronically on a tablet</p>
+  <p>Participant code: <b>${esc(c.participantCode)}</b></p>
+  <table><tr><th></th><th>Statement</th><th>Response</th></tr>${c.statements.map(s => `<tr><td class="c">${s.n}</td><td>${esc(s.text)}</td><td class="c">${s.agreed ? "Agreed" : "Not agreed"}</td></tr>`).join("")}<tr><td class="c">${c.optional.n}</td><td>${esc(c.optional.text)}</td><td class="c">${c.optional.agreed ? "Yes" : "No"}</td></tr></table>
+  <div class="sig"><div><b>Participant</b><br>Name: ${esc(c.participantName)}<br><img src="${c.participantSignature}" alt="Participant signature"><br>Date: ${new Date(c.signedAt).toLocaleString("en-GB")}</div>
+  <div><b>Researcher taking consent</b><br>Name: ${esc(c.researcherName)}<br><img src="${c.researcherSignature}" alt="Researcher signature"><br>Date: ${new Date(c.signedAt).toLocaleString("en-GB")}</div></div>
+  <p style="margin-top:18px;font-size:11px">Record ${esc(c.id)} · stored separately from research data.</p></body></html>`;
+}
+
+/* end + finish in one place */
+async function saveConsentFile(c) { const d = new Date(c.signedAt); if (await saveFile(`consent_${c.participantCode.replace(/\W+/g, "")}_${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}.html`, consentHtml(c))) { c.exportedAt = new Date().toISOString(); persist(); return true; } return false; }
+function openEnd() {
+  const checks = sessionChecks(S); const cons = consentFor(S.meta.participant);
+  openSheet(`<h2>End session</h2>
+  <p class="sub">Stop the eye tracker first, then the other recorders, then take off the equipment. <b>Finish session</b> logs the end time and saves the session file${cons && !cons.exportedAt ? " and the consent form" : ""} to the tablet.</p>
+  ${checks.length ? `<div class="help"><b>Still missing</b><ul style="margin:6px 0 0;padding-left:18px">${checks.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>` : `<p class="note">Nothing missing.</p>`}
+  <div class="row" style="margin-top:16px"><button class="btn primary" data-endfinish>Finish session</button><button class="btn" data-close>Back to logging</button></div>`);
+  $("#sheetCard").onclick = async e => {
+    if (e.target.closest("[data-close]")) return closeSheet();
+    if (e.target.closest("[data-endfinish]")) { closeSheet(); await finishSession("manual"); }
+  };
+}
+/* one finish routine, used by the End sheet and automatically after the final ratings */
+async function finishSession(via) {
+  if (!S.started || S.ended) return;
+  const cons = consentFor(S.meta.participant);
+  if (S.phase !== "end") setPhase("end");
+  S.ended = Date.now(); logEvent("session_end", { via }); persist();
+  const ok = await exportSession(S, "json");
+  if (cons && !cons.exportedAt) await saveConsentFile(cons);
+  closeSheet(); newSession(); showTab("export");
+  toast(ok ? "Session finished and saved. Copy the files to the encrypted laptop today." : "Session finished but the file was not saved: save it from Earlier sessions on the Export tab.", ok ? "" : "warn");
+}
+function autoFinishAfterEnd() {
+  if (!S.started || S.ended) return;
+  if (phaseStart("acc2")) return finishSession("auto_after_end_ratings");
+  openSheet(`<h2>acc2 not logged</h2><p class="sub">acc2 not logged – do the 5-dot check first?</p>
+  <div class="row" style="margin-top:16px"><button class="btn primary" data-acc2now>Do acc2 now</button><button class="btn" data-finishanyway>Finish anyway</button></div>`);
+  $("#sheetCard").onclick = async e => {
+    if (e.target.closest("[data-acc2now]")) { logEvent("end_check", { missing: "acc2", choice: "acc2_first" }); S.finishAfterAcc2 = true; persist(); closeSheet(); openAccuracy("acc2"); }
+    if (e.target.closest("[data-finishanyway]")) { logEvent("end_check", { missing: "acc2", choice: "finish_anyway" }); persist(); closeSheet(); await finishSession("auto_without_acc2"); }
+  };
+}
+
+/* leaving the mapped areas */
+const placeLabel = id => PLACES.find(p => p.id === id)?.label || id || "unknown";
+function openLeave() {
+  openSheet(`<h2>Participant left the mapped areas</h2>
+  <p class="sub">Where did they go? Time there is logged separately and kept out of every area's baseline. When they come back, tap the area they re-enter on the map.</p>
+  <div class="tasks">${PLACES.map(p => `<button class="task" data-place="${p.id}">${esc(p.label)}</button>`).join("")}</div>
+  <p class="note" style="margin-top:10px">For the toilet or a private conversation, ask the participant to pause the recording or take the glasses off, as agreed in the briefing.</p>
+  <div class="row" style="margin-top:14px"><button class="btn" data-close>Cancel</button></div>`);
+  $("#sheetCard").onclick = e => {
+    const b = e.target.closest("[data-place]");
+    if (b) { const from = S.zone; logEvent("leave", { from_zone: from, place: b.dataset.place }); S.zone = ""; S.outside = { place: b.dataset.place, t: Date.now() }; persist(); closeSheet(); toast(`Left ${zoneLabel(from)} → ${placeLabel(b.dataset.place)}`, "", { label: "Undo", fn: undo }); renderLive(); }
+    if (e.target.closest("[data-close]")) closeSheet();
+  };
+}
+
+/* sync explanation (shown right after starting) */
+function openSyncInfo(first) {
+  openSheet(`<h2>Sync ${S.syncN + 1}</h2>
+  <ol class="sub" style="padding-left:20px;margin:0">
+    <li>Eye tracker recording?</li>
+    <li>Tap <b>Show sync screen</b>.</li>
+    <li>Hold the tablet 50 cm in front of their face, screen towards them, for 2 s.</li>
+    <li>Tap the screen to close.</li>
+  </ol>
+  <div class="row" style="margin-top:14px"><button class="btn primary" data-dosync>Show sync screen</button><button class="btn" data-close>Later</button></div>`);
+  $("#sheetCard").onclick = e => { if (e.target.closest("[data-dosync]")) { closeSheet(); doSync(); } if (e.target.closest("[data-close]")) closeSheet(); };
+}
+
+/* accuracy test */
+function openAccuracy(id) {
+  const label = PHASES.find(p => p.id === id).label; const running = S.phase === id;
+  openSheet(`<h2>${esc(label)}</h2>
+  <ol class="sub" style="padding-left:20px;margin:0">
+    <li>Hold the <b>A4 dot sheet</b> (landscape) ${TARGET_DIST} away, centre dot at their eye height, flat and facing them. Keep your hands off the dots.</li>
+    <li>"Keep your head still, move only your eyes to the dot I call."</li>
+    <li>Tap <b>Start paper dots</b>. After a 3-2-1 the tablet beeps and shows you which dot to call, 2 s each: 1 centre, 2 top left, 3 top right, 4 bottom right, 5 bottom left. Call each one out.</li>
+    <li>Tap <b>Done</b>.</li>
+  </ol>
+  <div class="row" style="margin-top:12px"><button class="btn primary" data-accpaper>Start paper dots</button>${running
+    ? `<span class="chip zone">Running since ${hms(phaseStart(id))}</span><button class="btn primary" data-accdone>${id === "acc1" ? "Done: start acclimatisation" : "Done"}</button>` : ""}
+    <button class="btn sm" data-accdots>No sheet: show dots on tablet</button><button class="btn" data-close>Close</button></div>`);
+  $("#sheetCard").onclick = e => {
+    if (e.target.closest("[data-accpaper]")) { closeSheet(); if (S.phase !== id) setPhase(id); paperDots(id); }
+    if (e.target.closest("[data-accdots]")) { closeSheet(); if (S.phase !== id) setPhase(id); showDots(id); }
+    if (e.target.closest("[data-accdone]")) { closeSheet(); if (id === "acc1") setPhase("acclim"); else if (S.finishAfterAcc2) { S.finishAfterAcc2 = false; persist(); finishSession("auto_after_acc2"); } else toast("5-dot test 2 done. Next: final ratings, then end."); }
+    if (e.target.closest("[data-close]")) closeSheet();
+  };
+}
+let audioCtx = null;
+function beep(freq = 880, ms = 120) {
+  try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); const o = audioCtx.createOscillator(), g = audioCtx.createGain(); o.frequency.value = freq; g.gain.value = 0.25; o.connect(g); g.connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime + ms / 1000); } catch {}
+}
+function paperDots(id) {
+  const L = ["1 · CENTRE", "2 · TOP LEFT", "3 · TOP RIGHT", "4 · BOTTOM RIGHT", "5 · BOTTOM LEFT"];
+  const o = document.createElement("div");
+  o.style.cssText = "position:fixed;inset:0;z-index:60;background:#111;color:#fff;font-family:var(--f-sans);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center";
+  document.body.appendChild(o);
+  const timers = []; let aborted = false;
+  const finish = () => { timers.forEach(clearTimeout); o.remove(); openAccuracy(id); };
+  o.addEventListener("click", () => { if (!aborted) { aborted = true; logEvent("acc_dot", { note: id + " aborted" }); finish(); } });
+  const show = (big, small) => { o.innerHTML = `<div style="font-size:84px;font-weight:700;line-height:1.05">${big}</div><div style="font-size:18px;opacity:.7">${small}</div>`; };
+  try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); audioCtx.resume(); } catch {}
+  [3, 2, 1].forEach((n, i) => timers.push(setTimeout(() => { show(n, "Paper dots · call each dot as it appears · tap to stop"); beep(440, 80); }, i * 1000)));
+  L.forEach((t, i) => timers.push(setTimeout(() => { show(t, "Call it out now"); beep(880, 150); logEvent("acc_dot", { note: id + " dot " + (i + 1) + " paper" }); }, 3000 + i * 2000)));
+  timers.push(setTimeout(() => { beep(660, 300); logEvent("acc_dot", { note: id + " end paper" }); finish(); }, 3000 + L.length * 2000));
+}
+function showDots(id) {
+  const P = [[50, 50], [7, 9], [93, 9], [93, 91], [7, 91]];
+  const o = document.createElement("div");
+  o.style.cssText = "position:fixed;inset:0;z-index:60;background:#fff;color:#000;font-family:var(--f-sans)";
+  document.body.appendChild(o);
+  const bull = (x, y) => `<div style="position:absolute;left:${x}%;top:${y}%;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;background:radial-gradient(circle,#000 0 5px,#fff 6px 12px,#000 13px 22px)"></div>`;
+  const timers = []; let k = -1; let aborted = false;
+  const finish = () => { timers.forEach(clearTimeout); o.remove(); openAccuracy(id); };
+  o.addEventListener("click", () => { if (!aborted) { aborted = true; logEvent("acc_dot", { note: id + " aborted" }); finish(); } });
+  const count = n => { o.innerHTML = `<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px"><div style="font-size:90px;font-weight:700">${n}</div><div style="font-size:18px">Turn the screen to them · tap to stop</div></div>`; };
+  [3, 2, 1].forEach((n, i) => timers.push(setTimeout(() => count(n), i * 1000)));
+  P.forEach((p, i) => timers.push(setTimeout(() => { o.innerHTML = bull(p[0], p[1]); logEvent("acc_dot", { note: id + " dot " + (i + 1) }); }, 3000 + i * 2000)));
+  timers.push(setTimeout(() => { logEvent("acc_dot", { note: id + " end" }); finish(); }, 3000 + P.length * 2000));
+}
+
+/* walk-through: ONE route definition drives the steps, the red line, the numbering and the logging */
+const zoneIdByName = n => geo.zones.find(z => z.name.toLowerCase() === n.toLowerCase())?.id;
+function walkReversed() { return typeof S.meta.walkReverse === "boolean" ? S.meta.walkReverse : S.meta.sessionNo === "2"; }
+function doorsBetween(a, b) { return geo.lines.filter(l => l.zones.includes(a) && l.zones.includes(b)); }
+let _walkPlans = null;
+function walkPlans() {
+  if (_walkPlans && _walkPlans.geoRef === geo) return _walkPlans;
+  const F = WALK.forward; let si = 0; const zs = [F.start]; const moves = [];
+  for (const st of F.steps) {
+    const from = zs[zs.length - 1];
+    const door = st.door || null;
+    const stop = st.pause ? { ...F.stops[si], pid: si + 1 } : null; if (st.pause) si++;
+    moves.push({ from, to: st.zone, door, stop }); zs.push(st.zone);
+  }
+  // Reverse = the forward walk exactly backwards (same doors, same points). It starts one zone before the
+  // forward route's last zone, so the first paused zone is entered through a door like on the forward route.
+  const n = moves.length; const rm = [{ ...moves[n - 1] }];
+  for (let j = n - 1; j >= 1; j--) rm.push({ from: moves[j].to, to: moves[j].from, door: moves[j].door, stop: moves[j - 1].stop });
+  // A paused area must be entered through a door. Reversed, if one would be entered across an open boundary,
+  // step out through its next door and back in.
+  for (let i = 0; i < rm.length - 1; i++) { const m = rm[i], nx = rm[i + 1];
+    if (m.stop && !m.door && !isPassage(zoneById(zoneIdByName(m.to))) && nx.from === m.to && nx.door) {
+      rm.splice(i, 1, { ...m, stop: null }, { from: m.to, to: nx.to, door: nx.door, stop: null }, { from: nx.to, to: m.to, door: nx.door, stop: m.stop }); i += 2; } }
+  const finish = (start, mv) => {
+    let order = 0;
+    const out = mv.map(m => {
+      const fromId = zoneIdByName(m.from), toId = zoneIdByName(m.to);
+      const cand = doorsBetween(fromId, toId);
+      const line = (m.door ? cand.find(l => l.name === m.door) : cand.find(l => l.type === "open")) || cand.find(l => l.type === "threshold") || null;
+      const stop = m.stop ? { ...m.stop, zoneId: toId, order: ++order, pause_only: !!line && line.type === "open" } : null;
+      return { ...m, fromId, toId, line, stop };
+    });
+    return { start, startId: zoneIdByName(start), moves: out, stops: out.filter(m => m.stop).map(m => m.stop) };
+  };
+  _walkPlans = { geoRef: geo, fwd: finish(F.start, moves), rev: finish(moves[n - 1].from, rm) };
+  return _walkPlans;
+}
+const walkPlan = () => walkPlans()[walkReversed() ? "rev" : "fwd"];
+function walkRoute() { const p = walkPlan(); return p.startId && p.moves.every(m => m.fromId && m.toId) ? [p.startId, ...p.moves.map(m => m.toId)] : null; }
+function walkStartEvent() { return [...S.events].reverse().find(e => !e.void && e.type === "phase" && e.phase_to === "walk") || null; }
+// Pauses started in the current walk-through, keyed by forward pause id.
+function walkPausesDone() {
+  const ws = walkStartEvent(); const done = new Map(); if (!ws) return done;
+  S.events.forEach(e => { if (!e.void && e.seq > ws.seq && e.type === "pause_start" && e.pause_id) done.set(e.pause_id, e); });
+  return done;
+}
+// The pause point for the zone the participant is in: one point per zone, so the zone decides, never a counter.
+function walkStopForZone(zid) { return walkPlan().stops.find(s => s.zoneId === zid) || null; }
+// What comes next: the first point not yet paused, and the door on the route from where the participant is now.
+function walkNext() {
+  const p = walkPlan(); if (!walkRoute()) return null;
+  const done = walkPausesDone();
+  const target = p.stops.find(s => !done.has(s.pid)) || null;
+  if (!target) return { plan: p, target: null, move: null, done };
+  const ti = p.moves.findIndex(m => m.stop && m.stop.pid === target.pid);
+  let lastDone = -1; p.moves.forEach((m, i) => { if (m.stop && done.has(m.stop.pid) && i < ti) lastDone = i; });
+  let move = null;
+  for (let i = lastDone + 1; i <= ti; i++) if (p.moves[i].fromId === S.zone) { move = p.moves[i]; break; }
+  return { plan: p, target, move, done, atTarget: S.zone === target.zoneId };
+}
+// The door the route expects next (highlighted only; every door stays tappable).
+function walkDoor() {
+  if (S.phase !== "walk" || !geo.builtin) return null;
+  const w = walkNext(); return w && w.move && w.move.line ? w.move.line : null;
+}
+function openWalk() {
+  const p = walkPlan(); const running = S.phase === "walk"; const done = running ? walkPausesDone() : new Map();
+  const rows = walkRoute() ? p.moves.map(m => {
+    const via = m.line ? (m.line.type === "open" ? `across the open boundary ${m.line.name} (not a crossing)` : `through ${m.line.name}`) : "";
+    return `<div class="zrow"><span>${m.stop ? `<b class="mono">${pad(m.stop.order)}</b> ` : `<span class="mono note">··</span> `}${esc(disp(m.to))}${m.stop ? ` <span class="chip zone">pause ${m.stop.order}</span>` : ` <span class="note">walk through</span>`}${m.stop && done.has(m.stop.pid) ? ` <span class="chip">✓</span>` : ""}</span><span class="note">${esc(via)}</span></div>`; }).join("")
+    : `<p class="note">The route needs a floor plan with the area names it uses.</p>`;
+  openSheet(`<h2>Walk-through</h2>
+  <p class="sub">About 10–15 minutes, at the <b>first quiet period after the second rating</b> (otherwise after normal work, before the final sync), whenever the work allows. Say: <b>"${esc(WALK.script)}"</b> Give no viewing instruction. Direction: <b>${walkReversed() ? "reverse" : "forward"}</b> <button class="btn" data-walkflip ${running ? "disabled" : ""}>Switch direction</button></p>
+  <ol class="sub" style="padding-left:20px;margin-top:0">
+    <li>Start in <b>${esc(disp(p.start))}</b>. Tap each door on the map as they cross it, as usual. The next door on the route is highlighted, but <b>every door can be tapped</b>: if they use another one, tap the one they used and it is logged as a different door.</li>
+    <li>At each numbered point, when they have stopped, tap <b>Start ${PAUSE_S} s pause</b>. The pause ends by itself after ${PAUSE_S} s with a beep: tell them to continue.</li>
+    <li>The pause is logged for the area they are in, so a different order or a missed point does not shift the numbers.</li>
+    <li>If a point is occupied, use a spot nearby; if neither is safe, skip it. At the end tap <b>Finish walk-through</b> and say whether it was complete or partial.</li>
+    <li>Use the opposite direction from this participant's other session. For a first session, alternate forward and reverse across participants.</li>
+  </ol>
+  <h3 style="margin-top:6px">Route</h3>${walkMap()}<p class="note" style="margin:-4px 0 8px">Numbers are the pause points in walking order for this direction; stand where the dot is.</p>${rows}
+  <div class="row" style="margin-top:14px">${running ? `<span class="chip zone">Running since ${hms(phaseStart("walk"))}</span><button class="btn primary" data-walkfinish>Finish walk-through</button>` : `<button class="btn primary" data-walkstart>Start walk-through</button>`}<button class="btn" data-close>Close</button></div>`);
+  $("#sheetCard").onclick = e => {
+    if (e.target.closest("[data-walkflip]")) { S.meta.walkReverse = !walkReversed(); persist(); openWalk(); return; }
+    if (e.target.closest("[data-walkstart]")) { closeSheet(); setPhase("walk"); const p2 = walkPlan(); logEvent("walk_start", { walk_dir: walkReversed() ? "reverse" : "forward", route_start: p2.start, zone_at_start: zoneName(S.zone), route_rev: WALK.rev }); if (S.zone !== p2.startId) toast(`The route starts in ${disp(p2.start)}; the participant is in ${zoneLabel(S.zone)}. Walk there first, or start anyway and follow the highlighted door.`, "warn"); renderLive(); }
+    if (e.target.closest("[data-walkfinish]")) { openWalkFinish("work"); return; }
+    if (e.target.closest("[data-close]")) closeSheet();
+  };
+}
+function openWalkFinish(nextPhase) {
+  const p = walkPlan(); const done = walkPausesDone();
+  const missing = p.stops.filter(s => !done.has(s.pid));
+  openSheet(`<h2>Finish walk-through</h2>
+  <p class="sub">${done.size} of ${p.stops.length} points paused.${missing.length ? " Not paused: " + missing.map(s => `${s.order} · ${esc(disp(s.zone))}`).join(", ") + "." : ""}</p>
+  <div class="field"><label class="lbl">Completion</label><div class="seg"><button data-wc="complete" aria-pressed="${missing.length ? "false" : "true"}">Complete</button><button data-wc="partial" aria-pressed="${missing.length ? "true" : "false"}">Partial</button></div></div>
+  <div class="field" style="margin-top:10px"><label class="lbl">Skipped points</label><div class="tasks">${p.stops.map(s => `<button class="task ${done.has(s.pid) ? "" : "on"}" data-skip="${s.pid}">${s.order} · ${esc(disp(s.zone))}</button>`).join("")}</div></div>
+  <div class="field" style="margin-top:10px"><label class="lbl" for="wNotes">Fallback spots, detours, interruptions</label><input id="wNotes" value="${esc(S.meta.walkNotes || "")}" placeholder="e.g. 2 skipped (occupied); 3 fallback spot"></div>
+  <div class="row" style="margin-top:14px"><button class="btn primary" data-wfsave>Finish and continue with ${esc(PHASES.find(x => x.id === nextPhase)?.label || nextPhase)}</button><button class="btn" data-close>Back to the walk-through</button></div>`);
+  let comp = missing.length ? "partial" : "complete"; const skip = new Set(missing.map(s => s.pid));
+  $("#sheetCard").onclick = e => {
+    const wc = e.target.closest("[data-wc]"); if (wc) { comp = wc.dataset.wc; $("#sheetCard").querySelectorAll("[data-wc]").forEach(b => b.setAttribute("aria-pressed", b === wc)); }
+    const sk = e.target.closest("[data-skip]"); if (sk) { const id = +sk.dataset.skip; if (skip.has(id)) { skip.delete(id); sk.classList.remove("on"); } else { skip.add(id); sk.classList.add("on"); } }
+    if (e.target.closest("[data-wfsave]")) {
+      if (S.paused) togglePause();
+      const sk2 = p.stops.filter(s => skip.has(s.pid));
+      S.meta.walkCompletion = comp; S.meta.walkNotes = $("#wNotes").value.trim();
+      logEvent("walk_completion", { completion: comp, walk_dir: walkReversed() ? "reverse" : "forward", paused_n: done.size, skipped: sk2.map(s => s.zone), skipped_ids: sk2.map(s => s.pid), notes: S.meta.walkNotes });
+      persist(); closeSheet(); setPhase(nextPhase); toast(`Walk-through ${comp}. ${PHASES.find(x => x.id === nextPhase)?.label || nextPhase} continues.`);
+    }
+    if (e.target.closest("[data-close]")) closeSheet();
+  };
+}
+
+/* correct zone */
+function openFix() {
+  if (!S.started) { toast("Start the session first"); return; }
+  openSheet(`<h2>Correct zone</h2><p class="sub">Use this only if the map no longer shows where the participant is, for example after a missed crossing. It is logged as a correction, not a crossing.</p>
+  <div class="tasks">${geo.zones.map(z => `<button class="task ${z.id === S.zone ? "on" : ""}" data-fix="${z.id}">${esc(disp(z.name))}</button>`).join("")}</div>
+  <div class="row" style="margin-top:14px"><button class="btn" data-close>Cancel</button></div>`);
+  $("#sheetCard").onclick = e => {
+    const b = e.target.closest("[data-fix]"); if (b) { const to = b.dataset.fix; if (to !== S.zone || S.outside) { const from = S.zone; S.zone = to; S.outside = null; logEvent("zone_fix", { from_zone: from, to_zone: to }); toast(`Zone corrected to ${zoneLabel(to)}`); } closeSheet(); renderLive(); }
+    if (e.target.closest("[data-close]")) closeSheet();
+  };
+}
+
+/* ---------------- Sheets: ratings + inventory ---------------- */
+function freshCard() { const old = $("#sheetCard"); const n = old.cloneNode(false); old.replaceWith(n); return n; }
+let sheetLocked = false;
+function openSheet(html, locked = false) { freshCard().innerHTML = html; sheetLocked = locked; $("#sheet").hidden = false; $("#sheet").classList.toggle("locked", locked); }
+function closeSheet() { $("#sheet").hidden = true; sheetLocked = false; $("#sheet").classList.remove("locked"); freshCard(); }
+$("#sheet").addEventListener("click", e => { if (e.target.id === "sheet" && !sheetLocked) closeSheet(); });
+
+function scaleHtml(key, n, from, step = 1, lo = "", hi = "") {
+  let b = ""; for (let v = from; v <= n; v += step) b += `<button data-k="${key}" data-v="${v}">${v}</button>`;
+  return `<div class="scale">${b}</div>${lo || hi ? `<div class="ends"><span>${esc(lo)}</span><span>${esc(hi)}</span></div>` : ""}`;
+}
+function bindScales(answers) {
+  $("#sheetCard").addEventListener("click", e => {
+    const b = e.target.closest("[data-k]"); if (!b) return;
+    answers[b.dataset.k] = b.dataset.v;
+    b.parentElement.querySelectorAll(`[data-k="${CSS.escape(b.dataset.k)}"]`).forEach(x => x.classList.toggle("on", x === b));
+  });
+}
+function visitedZones() { const s = new Set(); S.events.forEach(e => { if (!e.void) { if (e.to_zone) s.add(e.to_zone); if (e.from_zone) s.add(e.from_zone); } }); return analysisZones().filter(z => s.has(z.id)); }
+function openObserver(probe) {
+  const after = () => { if (probe === "END") autoFinishAfterEnd(); };
+  const items = PROBE_ITEMS.filter(i => i.observer); if (!items.length) return after();
+  const answers = {};
+  openSheet(`<h2>Observer · ${probeLabel(probe)}</h2><p class="sub">For you, after the tablet is back.</p>
+    ${items.map(it => `<div class="q"><p>${esc(it.q)}</p><div class="scale">${it.options.map(o => `<button data-k="${it.id}" data-v="${o}" style="font-family:var(--f-sans)">${o}</button>`).join("")}</div></div>`).join("")}
+    <div class="row" style="margin-top:16px"><button class="btn primary" data-save>Save</button><button class="btn" data-close>Skip</button></div>`);
+  bindScales(answers);
+  $("#sheetCard").onclick = e => {
+    if (e.target.closest("[data-close]")) { closeSheet(); after(); }
+    if (e.target.closest("[data-save]")) {
+      const ev = logEvent("observer_rating", { probe });
+      Object.entries(answers).forEach(([k, v]) => S.ratings.push({ probe, event_seq: ev.seq, t: ev.t, iso: ev.iso, item: k, zone_id: "", zone_name: "", value: v, void: false }));
+      persist(); closeSheet(); renderLive(); after();
+    }
+  };
+}
+function openProbe(probe) {
+  if (!S.started) { toast("Start the session first"); return; }
+  if (probe === "END") { const last = ["T3", "T2", "T1"].map(probeEvent).find(Boolean); const gap = last ? (Date.now() - last.t) / 60000 : null;
+    if (gap != null && gap < PROBE_GAP_MIN && !confirm(`${last.probe} was only ${Math.round(gap)} min ago. The final ratings should be at least ${PROBE_GAP_MIN} min later. Rate now anyway?`)) return; }
+  const answers = {};
+  let body = "";
+  for (const it of PROBE_ITEMS.filter(i => !i.observer)) {
+    body += `<div class="q"><p>${esc(probe === "T1" && it.q_first ? it.q_first : it.q)}</p>`;
+    if (it.type === "tlx") body += scaleHtml(it.id, 100, 0, 5, it.lo, it.hi);
+    if (it.type === "l7") body += scaleHtml(it.id, 7, 1, 1, it.lo, it.hi);
+    if (it.type === "labelled") body += `<div class="kss">${Object.entries(it.levels).map(([k, v]) => `<button data-k="${it.id}" data-v="${k}"><b>${k}</b>${esc(v)}</button>`).join("")}</div>`;
+    if (it.type === "choice") body += `<div class="scale">${it.options.map(o => `<button data-k="${it.id}" data-v="${o}" style="font-family:var(--f-sans)">${o}</button>`).join("")}</div>`;
+    body += `</div>`;
+  }
+  let zoneBlock = "";
+  if (probe === "END") {
+    const zs = visitedZones();
+    zoneBlock = `<div class="q"><p>${esc(ZONE_ITEM.q)}</p><p class="note" style="font-weight:400">${esc(ZONE_ITEM.lo)} = 1 · ${esc(ZONE_ITEM.hi)} = 7. Areas entered this session, including the walk-through.</p>
+    ${zs.map(z => `<div class="zrow"><span>${esc(disp(z.name))}</span>${scaleHtml("zone:" + z.id, 7, 1).replace("</div>", `<button data-k="zone:${z.id}" data-v="NA" class="na">N/A</button></div>`)}</div>`).join("") || `<p class="note">No areas logged yet.</p>`}</div>`;
+  }
+  openSheet(`<h2>${probeLabel(probe)}</h2>
+    <p class="sub">Please answer each question by tapping a number, then tap Save and hand the tablet back. You can leave out any question you prefer not to answer.</p>
+    ${body}${zoneBlock}
+    <div class="row" style="margin-top:16px"><button class="btn primary" data-save>Save ratings</button><button class="btn sm obsx" data-obsclose>Researcher: cancel</button></div>`, true);
+  bindScales(answers);
+  logEvent("rating_start", { probe }); persist();
+  $("#sheetCard").onclick = e => {
+    if (e.target.closest("[data-obsclose]") && confirm("Cancel these ratings? Answers will be lost.")) { logEvent("rating_cancel", { probe }); persist(); closeSheet(); }
+    if (e.target.closest("[data-save]")) {
+      const ev = logEvent("rating", { probe });
+      Object.entries(answers).forEach(([k, v]) => {
+        const isZ = k.startsWith("zone:");
+        S.ratings.push({ probe, event_seq: ev.seq, t: ev.t, iso: ev.iso, item: isZ ? "zone_ease" : k, zone_id: isZ ? k.slice(5) : "", zone_name: isZ ? zoneName(k.slice(5)) : "", value: v, void: false });
+      });
+      persist(); closeSheet(); toast(`${probeLabel(probe)} saved (${Object.keys(answers).length} answers)`); renderLive(); openObserver(probe);
+    }
+  };
+}
+function staticMap() {
+  const lay = labelLayout(); const fs = geo.width / 70;
+  let h = `<svg viewBox="0 0 ${geo.width} ${geo.height}" style="width:100%;height:auto;display:block;margin:8px 0 12px;border:1px solid var(--rule);border-radius:8px;background:#fff">`;
+  if (geo.image) h += `<image href="${geo.image}" x="0" y="0" width="${geo.width}" height="${geo.height}" opacity="0.55"/>`;
+  for (const z of analysisZones()) if (z.points.length > 2) h += `<polygon points="${z.points.map(p => p.x + "," + p.y).join(" ")}" fill="#2f7fbf" fill-opacity="0.18" stroke="#2f7fbf" stroke-width="3"/>`;
+  for (const z of analysisZones()) { const c = lay[z.id] || centroid(z.points); h += `<text x="${c.x}" y="${c.y}" font-size="${fs}" font-weight="700" text-anchor="middle" dominant-baseline="middle" fill="#16212b" stroke="#fff" stroke-width="${fs / 5}" paint-order="stroke" font-family="sans-serif">${esc(disp(z.name))}</text>`; }
+  return h + `</svg>`;
+}
+function openInventory() {
+  const inv = S.inventory || {}; const answers = { ...(inv.familiarity ? Object.fromEntries(Object.entries(inv.familiarity).map(([k, v]) => ["fam:" + k, v])) : {}) };
+  const sel = (id, opts, val) => `<select id="${id}"><option value="">—</option>${opts.map(o => `<option ${o === val ? "selected" : ""}>${o}</option>`).join("")}</select>`;
+  openSheet(`<h2>Participant inventory</h2><p class="sub">Asked once per participant, at the start of the first session.</p>
+  <div class="grid-form">
+    <div class="field"><label class="lbl" for="invAge">Age band</label>${sel("invAge", ["18–24", "25–34", "35–44", "45–54", "55+", "prefer not to say"], inv.ageBand)}</div>
+    <div class="field"><label class="lbl" for="invGender">Gender</label>${sel("invGender", ["woman", "man", "non-binary", "prefer to self-describe", "prefer not to say"], inv.gender)}</div>
+    <div class="field"><label class="lbl" for="invHeightUnit">Height</label><div class="row" style="gap:6px;flex-wrap:nowrap"><select id="invHeightUnit" style="width:auto"><option value="cm" ${inv.heightUnit !== "ftin" ? "selected" : ""}>cm</option><option value="ftin" ${inv.heightUnit === "ftin" ? "selected" : ""}>ft + in</option></select><input id="invHeight" inputmode="numeric" placeholder="cm" style="width:5.5em;${inv.heightUnit === "ftin" ? "display:none" : ""}" value="${esc(inv.heightUnit === "ftin" ? "" : (inv.heightCm || ""))}"><input id="invFt" inputmode="numeric" placeholder="ft" style="width:3.5em;${inv.heightUnit === "ftin" ? "" : "display:none"}" value="${esc(inv.heightFt || "")}"><input id="invIn" inputmode="decimal" placeholder="in" style="width:3.5em;${inv.heightUnit === "ftin" ? "" : "display:none"}" value="${esc(inv.heightIn || "")}"></div></div>
+    <div class="field"><label class="lbl" for="invBand">${esc(INVENTORY.gradeLabel)}</label>${sel("invBand", INVENTORY.grades, inv.grade)}</div>
+    <div class="field"><label class="lbl" for="invMonths">Months in post</label><input id="invMonths" inputmode="numeric" value="${esc(inv.monthsInPost || "")}"></div>
+    <div class="field"><label class="lbl" for="invLenses">${esc(INVENTORY.visionLabel)}</label>${sel("invLenses", INVENTORY.vision, inv.lenses)}</div>
+    <div class="field"><label class="lbl" for="invMed">${esc(INVENTORY.eligibleLabel)}</label>${sel("invMed", INVENTORY.eligible, inv.eligibility)}</div>
+  </div>
+  <div class="q"><p>${esc(FAMILIAR_ITEM.q)}</p><p class="note" style="font-weight:400">${esc(FAMILIAR_ITEM.lo)} = 1 · ${esc(FAMILIAR_ITEM.hi)} = 5</p>
+  ${staticMap()}${[...analysisZones()].sort(byName).map(z => `<div class="zrow"><span>${esc(disp(z.name))}</span>${scaleHtml("fam:" + z.id, 5, 1)}</div>`).join("")}</div>
+  <div class="row" style="margin-top:16px"><button class="btn primary" data-save>Save inventory</button><button class="btn sm obsx" data-obsclose>Researcher: cancel</button></div>`, true);
+  Object.entries(answers).forEach(([k, v]) => $("#sheetCard").querySelectorAll(`[data-k="${CSS.escape(k)}"]`).forEach(b => b.classList.toggle("on", b.dataset.v === String(v))));
+  bindScales(answers);
+  $("#invHeightUnit").onchange = () => { const f = $("#invHeightUnit").value === "ftin"; $("#invHeight").style.display = f ? "none" : ""; $("#invFt").style.display = $("#invIn").style.display = f ? "" : "none"; };
+  $("#sheetCard").onclick = e => {
+    if (e.target.closest("[data-obsclose]") && confirm("Cancel the inventory? Answers will be lost.")) closeSheet();
+    if (e.target.closest("[data-save]")) {
+      const fam = {}; Object.entries(answers).forEach(([k, v]) => { if (k.startsWith("fam:")) fam[k.slice(4)] = v; });
+      const hU = $("#invHeightUnit").value, hFt = $("#invFt").value.trim(), hIn = $("#invIn").value.trim();
+      let hCm = $("#invHeight").value.trim();
+      if (hU === "ftin") hCm = (hFt || hIn) ? String(Math.round(((parseFloat(hFt) || 0) * 12 + (parseFloat(hIn) || 0)) * 2.54)) : "";
+      if (hCm && (isNaN(+hCm) || +hCm < 130 || +hCm > 215) && !confirm(`Height works out as ${hCm} cm. Save anyway?`)) return;
+      S.inventory = { ageBand: $("#invAge").value, gender: $("#invGender").value, heightCm: hCm, heightUnit: hU, heightFt: hU === "ftin" ? hFt : "", heightIn: hU === "ftin" ? hIn : "", heightEntered: hU === "ftin" ? `${hFt || 0} ft ${hIn || 0} in` : (hCm ? hCm + " cm" : ""), grade: $("#invBand").value, monthsInPost: $("#invMonths").value.trim(), lenses: $("#invLenses").value, eligibility: $("#invMed").value, familiarity: fam, savedAt: new Date().toISOString() };
+      persist(); closeSheet(); toast("Inventory saved"); renderSession();
+    }
+  };
+}
+
+/* ---------------- Render: header ---------------- */
+function renderStatus() {
+  const m = S.meta; const ph = PHASES.find(p => p.id === S.phase);
+  let h = "";
+  if (S.started && !S.ended) {
+    const cRec = m.consentRecordId ? (store.consents || []).find(c => c.id === m.consentRecordId) : null; const first = cRec?.participantName ? cRec.participantName.trim().split(/\s+/)[0] : "";
+    h += `<span class="chip">${esc(m.participant || "—")}${first ? " · " + esc(first) : ""} · ${esc(ROLES.find(r => r.id === m.role)?.label || "")}</span>`;
+    h += `<span class="chip zone">${esc(S.outside ? "Outside: " + placeLabel(S.outside.place) : zoneLabel(S.zone))}</span>`;
+    h += `<span class="chip">${esc(ph?.label || "No phase")}</span>`;
+    const mins = S.lastBackup ? (Date.now() - S.lastBackup) / 60000 : (Date.now() - S.started) / 60000;
+    if (mins > 30) h += `<span class="chip warn">No backup for ${Math.round(mins)} min</span>`;
+  } else h += `<span class="chip">No session running</span>`;
+  if (geo.example) h += `<span class="chip warn">Example floorplan</span>`;
+  $("#status").innerHTML = h;
+}
+
+/* ---------------- Render: session tab ---------------- */
+function renderSession() {
+  const m = S.meta; const running = S.started && !S.ended;
+  const opt = (arr, val) => arr.map(o => `<option value="${esc(o.id ?? o)}" ${String(o.id ?? o) === String(val) ? "selected" : ""}>${esc(o.label ?? o)}</option>`).join("");
+  const allZones = [...geo.zones].sort(byName).map(z => ({ id: z.id, label: disp(z.name) }));
+  const zoneOpts = allZones.filter(z => !isPassage(zoneById(z.id)) && !isRoom(zoneById(z.id)));
+  const chk = c => { const q = c.label.indexOf(': "'); const main = q > 0 ? c.label.slice(0, q) : c.label, quote = q > 0 ? c.label.slice(q + 2) : "";
+    return `<label class="ck"><input type="checkbox" data-check="${c.id}" ${S.meta.checklist?.[c.id] ? "checked" : ""}><span>${esc(main)}${c.id === "exposure" && S.meta.exposureMs ? ` <span class="mono note">${esc(S.meta.exposureMs)}</span>` : ""}${quote ? `<em class="quote">${esc(quote)}</em>` : ""}</span></label>`; };
+  $("#tab-session").innerHTML = `<div class="pad sess">
+  ${geo.example ? `<div class="panel" style="border-color:var(--warn);grid-column:1/-1"><b>The example floorplan is loaded.</b> <span class="note">Load your own in the Geometry tab, or edit config.js, before a real session.</span></div>` : ""}
+  <div class="panel"><h3>Session details</h3><div class="g3">
+    <div class="field"><label class="lbl" for="mPart">Participant code</label><input id="mPart" value="${esc(m.participant)}" placeholder="${esc(CODE_EXAMPLE)}" autocapitalize="characters" autocomplete="off" spellcheck="false"></div>
+    <div class="field"><label class="lbl" for="mRole">Role</label><select id="mRole"><option value="">—</option>${opt(ROLES, m.role)}</select></div>
+    <div class="field"><label class="lbl" for="mNo">Session</label><select id="mNo">${opt(SESSION_NUMBERS, m.sessionNo)}</select></div>
+    <div class="field"><label class="lbl" for="mArea">Allocated area</label><select id="mArea"><option value="">—</option><option value="${esc(NO_AREA.id)}" ${m.area === NO_AREA.id ? "selected" : ""}>${esc(NO_AREA.label)}</option>${opt(zoneOpts, m.area)}</select></div>
+    <div class="field"><label class="lbl" for="mStart">Starting area</label><select id="mStart"><option value="">—</option>${opt(allZones, m.startZone)}</select></div>
+    <div class="field"><label class="lbl" for="mObs">Observer</label><input id="mObs" value="${esc(m.observer)}" placeholder="Initials"></div>
+    <div class="field"><label class="lbl" for="mShift">Shift <label class="inl"><input type="checkbox" id="mLong" ${m.shiftLong ? "checked" : ""}> long</label></label><select id="mShift"><option value="">—</option>${opt(SHIFTS, m.shift)}</select></div>
+    <div class="field"><label class="lbl" for="mSP">Timing in shift</label><select id="mSP"><option value="">—</option>${opt(SHIFT_PHASES, m.shiftPhase)}</select></div>
+    <div class="field"><label class="lbl" for="mShiftStart">Shift started at</label><input id="mShiftStart" type="time" value="${esc(m.shiftStart || "")}"></div>
+    <div class="field"><label class="lbl" for="sExp">Camera exposure</label><input id="sExp" inputmode="decimal" value="${esc(m.exposureMs || "")}" placeholder="${esc(EXPECTED_EXPOSURE ? `expected ${EXPECTED_EXPOSURE}` : "read from the camera")}"></div>
+  </div>
+  <div class="field" style="margin-top:10px"><label class="lbl" for="mNotes">Notes</label><input id="mNotes" value="${esc(m.notes)}"></div>
+  <div class="row" style="margin-top:12px">${(() => { const c = consentFor(m.participant); return c ? `<span class="chip zone">Consent recorded ${new Date(c.signedAt).toLocaleDateString()} ${hms(Date.parse(c.signedAt))}</span>` : `<button class="btn" id="btnConsent">Consent on tablet</button>`; })()}<button class="btn" id="btnInv">${S.inventory ? "Edit participant inventory ✓" : "Participant inventory"}</button></div></div>
+  <div class="panel">${!S.started ? `<h3>Before you start</h3><div class="cklist">${CHECKLIST.map(chk).join("")}</div>
+    <p class="note" style="margin:8px 0 10px">All recorders must be running before you start; the sync comes straight after.</p>` : `<h3>Session</h3>`}
+  <div class="row">
+    ${running ? `<span class="chip zone">Running since ${hms(S.started)}</span><button class="btn primary" data-goto="live">Go to Live</button>`
+      : S.ended ? `<span class="chip">This session ended at ${hms(S.ended)}.</span><button class="btn primary" id="btnNew">Start a new session</button>`
+      : `<button class="btn primary" id="btnStart">Start session</button><span class="note">Starting logs the time and the starting area. Do this just before the first sync.</span>`}
+  </div></div>`;
+  const bind = (id, key, map = v => v) => { const el = $("#" + id); el.addEventListener("change", () => { S.meta[key] = map(el.value); persist(); renderStatus(); }); };
+  bind("mPart", "participant", v => v.trim().toUpperCase().replace(/\s+/g, "")); bind("mRole", "role"); bind("mNo", "sessionNo"); bind("mArea", "area");
+  bind("mShift", "shift"); bind("mSP", "shiftPhase"); bind("mObs", "observer", v => v.trim());
+  bind("mStart", "startZone"); bind("mNotes", "notes"); bind("mShiftStart", "shiftStart");
+  $("#mLong").addEventListener("change", e => { S.meta.shiftLong = e.target.checked; persist(); });
+  $("#sExp").addEventListener("change", e => { S.meta.exposureMs = e.target.value.trim(); persist(); renderStatus(); });
+  $("#sProbe")?.addEventListener("change", e => { const v = e.target.value.split(/[,; ]+/).map(Number).filter(n => n > 0).slice(0, 3); if (v.length === 3) { store.study.probeMins = v; if (S.started && !S.ended) S.meta.probeMins = v; persist(); } else toast("Enter three numbers, e.g. 45, 90, 135", "warn"); });
+  $("#btnInv").onclick = openInventory;
+  $("#btnConsent")?.addEventListener("click", () => { $("#mPart").dispatchEvent(new Event("change")); $("#mObs").dispatchEvent(new Event("change")); if (!S.meta.participant) return toast("Enter the participant code first", "warn"); openConsent(); });
+  document.querySelectorAll("[data-check]").forEach(cb => cb.addEventListener("change", () => { S.meta.checklist = { ...(S.meta.checklist || {}), [cb.dataset.check]: cb.checked ? new Date().toISOString() : null }; persist(); }));
+  $("#btnStart")?.addEventListener("click", startSession);
+  $("#btnNew")?.addEventListener("click", newSession);
+}
+function startSession() {
+  ["mPart", "mRole", "mStart", "sExp", "mShiftStart"].forEach(id => { const el = $("#" + id); el.dispatchEvent(new Event("change")); });
+  const m = S.meta; const missing = [];
+  if (!m.participant) missing.push("participant code"); if (!m.role) missing.push("role"); if (!m.startZone) missing.push("starting area"); if (!m.exposureMs) missing.push("exposure (read from the camera)"); if (!m.shiftStart) missing.push("time the shift started");
+  if (m.participant && !new RegExp(CODE_PATTERN).test(m.participant)) { toast(`Participant code "${m.participant}" is not valid. Use the study's format, for example ${CODE_EXAMPLE}.`, "warn"); return; }
+  if (missing.length) { toast("Missing: " + missing.join(", "), "warn"); return; }
+  if (EXPECTED_EXPOSURE && m.exposureMs !== EXPECTED_EXPOSURE && !confirm(`Exposure is ${m.exposureMs}, not ${EXPECTED_EXPOSURE}. Start anyway?`)) return; m.probeMins = [...store.study.probeMins];
+  m.shiftStratum = SHIFTS.find(s => s.id === m.shift)?.stratum || "";
+  const soft = []; if (!m.shift) soft.push("shift");
+  const unticked = CHECKLIST.filter(c => !m.checklist?.[c.id]);
+  if (unticked.length) soft.push(unticked.length + " checklist item" + (unticked.length > 1 ? "s" : "") + " not ticked");
+  S.started = Date.now(); S.zone = m.startZone; S.geometry = { name: geo.name, signature: geoSignature(), example: !!geo.example };
+  logEvent("session_start", { note: soft.length ? "missing: " + soft.join(", ") : "" });
+  logEvent("zone_start", { from_zone: "", to_zone: m.startZone });
+  requestWake(); persist();
+  if (soft.length) toast(`Session started. Still missing: ${soft.join(", ")}`, "warn");
+  showTab("live");
+  openSyncInfo(true);
+}
+function newSession() {
+  store.archive.unshift(S); store.session = blankSession(); S = store.session; persist(); renderAll(); toast("New session ready");
+}
+let wakeLock = null;
+async function requestWake() { try { wakeLock = await navigator.wakeLock?.request("screen"); } catch {} }
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && S.started && !S.ended) requestWake(); });
+
+/* ---------------- Render: live rail ---------------- */
+function renderLive() {
+  renderStatus();
+  $("#liveBlock").hidden = !!(S.started && !S.ended);
+  renderMap("live");
+  $("#liveHint").textContent = S.started && !S.ended ? (S.outside ? `Outside the mapped areas (${placeLabel(S.outside.place)}) · tap the area they come back into` : `In ${zoneLabel(S.zone)} · tap the line they walk over · solid = door, dashed = open boundary`) : "";
+  if (!S.started || S.ended) { $("#rail").innerHTML = `<p class="note">The logging controls appear once a session is running.</p>`; $("#steps").innerHTML = ""; return; }
+  $("#steps").innerHTML = STEPS.map(s => `<button class="st ${s.kind === "probe" && s.probe !== "END" ? "small" : ""}" data-step="${s.id}"><span>${esc(s.label)}</span><small>—</small></button>`).join("");
+  let timer = "";
+  if (S.phase === "acclim" || S.phase === "work") timer = `<div class="timer" id="tmr"><span id="tmrL"></span><b id="tmrText"></b></div>`;
+  if (S.phase === "walk") timer = `<div class="timer" id="walkNext" style="margin-bottom:6px"></div><button class="bigbtn" id="btnPause"></button><div class="row" style="margin-top:6px"><button class="btn sm ghost" data-walkinfo>Show route</button><button class="btn sm" data-walkfinish>Finish walk-through</button></div>`;
+  const tasks = [...(TASKS[S.meta.role] || []), TASK_NONE];
+  const pend = S.pendingInterruption ? `<div class="inits-head">Who interrupted?</div><div class="inits">${INITIATORS.map(i => `<button data-init="${i.id}">${esc(i.label)}</button>`).join("")}</div>` : "";
+  const recent = S.events.slice(-9).reverse().filter(e => e.type !== "zone_start" || true).map(e => `<div class="${e.void ? "void" : ""}"><span class="t">${hms(e.t)}</span><span>${esc(describe(e))}</span>${["interruption", "note"].includes(e.type) ? `<button class="x" data-void="${e.seq}" aria-label="${e.void ? "Restore" : "Void"} entry">${e.void ? "↺" : "×"}</button>` : "<span></span>"}</div>`).join("");
+  $("#rail").innerHTML = `
+    ${timer ? `<div class="sec">${timer}</div>` : ""}
+    <div class="sec"><h3>Task</h3><div class="tasks">${tasks.map(t => `<button class="task ${S.task === t.id ? "on" : ""}" data-task="${t.id}">${esc(t.label)}${t.grp ? `<span class="grp">${t.grp}</span>` : ""}</button>`).join("")}</div></div>
+    <div class="sec"><button class="bigbtn" id="btnInt">Interruption</button>${pend}</div>
+    <div class="sec">${S.outside ? `<div class="help"><b>Outside the mapped areas</b> since ${hm(S.outside.t)} · ${esc(placeLabel(S.outside.place))}<br>Tap the area on the map they come back into.</div>` : `<button class="btn" id="btnLeave" style="width:100%">Participant left the mapped areas</button>`}</div>
+    <div class="sec"><h3>Note</h3><div class="notebox"><input id="noteIn" placeholder="e.g. door propped open, alarm"><button class="btn sm" id="btnNote">Log</button></div></div>
+    <div class="sec"><h3>Recent</h3><div class="log">${recent}</div></div>`;
+  tick();
+}
+/* Updates timers and due-states in place, so a tap is never lost to a re-render. */
+function tick() {
+  if (!S.started || S.ended) return;
+  const now = Date.now();
+  const L = $("#tmrL"), T = $("#tmrText"), box = $("#tmr");
+  if (S.phase === "acclim" && T) { const left = ACCLIM_MIN * 60 - (now - phaseStart("acclim")) / 1000; L.textContent = "Acclimatisation"; T.textContent = left > 0 ? mmss(left) + " left · work starts automatically" : "Starting natural work…"; box.classList.toggle("go", left <= 0); }
+  const workEl = phaseStart("work") ? workMinutes(now) : null;
+  if (S.phase === "work" && T) {
+    const next = ["T1", "T2", "T3"].find(p => !probeDone(p)); const due = next ? probeDue(next) : null;
+    L.textContent = "Natural work " + mmss(workEl * 60);
+    const over = next && due != null ? workEl - due : null;
+    T.textContent = next && due != null ? (over >= PROBE_OVERDUE_MIN ? `${probeLabel(next)} overdue by ${Math.floor(over)} min` : over >= 0 ? `${probeLabel(next)} due now` : `${probeLabel(next)} in ${Math.ceil(-over)} min`) : "All ratings done";
+    box.classList.toggle("go", over != null && over >= 0); box.classList.toggle("warn", over != null && over >= PROBE_OVERDUE_MIN);
+  }
+  /* step bar: update text and state in place */
+  const order = STEPS.map(s => s.id); const nextId = order.find(id => { const s = STEPS.find(x => x.id === id); return !stepDone(s) && !(s.kind === "phase" && S.phase === s.id); });
+  document.querySelectorAll("#steps [data-step]").forEach(b => {
+    const s = STEPS.find(x => x.id === b.dataset.step); const done = stepDone(s); const cur = s.kind === "phase" && S.phase === s.id;
+    let sub = "", due = false;
+    if (s.kind === "sync") { const ev = S.events.filter(e => !e.void && e.type === "sync")[s.n - 1]; sub = ev ? hm(ev.t) : ""; }
+    if (s.kind === "phase") { const st = phaseStart(s.id); sub = st ? hm(st) : (s.id === "acclim" ? ACCLIM_MIN + "′" : ""); }
+    if (s.kind === "probe") {
+      const ev = [...S.events].reverse().find(e => !e.void && e.type === "rating" && e.probe === s.probe);
+      if (ev) sub = hms(ev.t);
+      else if (s.probe !== "END") { const m = probeDue(s.probe); due = workEl != null && workEl >= m; sub = workEl == null ? `${m}′` : due ? (workEl - m >= PROBE_OVERDUE_MIN ? "overdue" : "due") : `in ${Math.ceil(m - workEl)}′`; }
+      else sub = "";
+    }
+    b.classList.toggle("done", done && !cur); b.classList.toggle("cur", cur); b.classList.toggle("due", due && !done);
+    b.classList.toggle("next", !done && !cur && !due && s.id === nextId);
+    b.querySelector("small").textContent = (done && !cur ? "✓" + (sub ? " " : "") : "") + sub || "\u00a0";
+  });
+  const wn = $("#walkNext");
+  if (wn) { const w = walkNext(); if (w) {
+    const total = w.plan.stops.length;
+    if (!w.target) wn.innerHTML = `<span>Route</span><b>All ${total} points paused · tap Finish walk-through</b>`;
+    else if (w.atTarget) wn.innerHTML = `<span>Point ${w.target.order} of ${total} · ${w.done.size} paused</span><b>Stop at point ${w.target.order} · ${esc(disp(w.target.zone))}</b>`;
+    else if (w.move) wn.innerHTML = `<span>Next · point ${w.target.order} of ${total} · ${w.done.size} paused</span><b>${w.move.line ? (w.move.line.type === "open" ? "Across the open boundary" : "Through <b>" + esc(w.move.line.name) + "</b>") : ""} into ${esc(disp(w.move.to))}${w.move.stop ? ` → point ${w.move.stop.order}` : " (walk through)"}</b>`;
+    else wn.innerHTML = `<span>Next · point ${w.target.order} of ${total}</span><b>Head to ${esc(disp(w.target.zone))} (point ${w.target.order})</b>`;
+  } }
+  const pb = $("#btnPause");
+  if (pb) {
+    const ps = [...S.events].reverse().find(e => !e.void && e.type === "pause_start");
+    const left = S.paused && ps ? PAUSE_S - (now - ps.t) / 1000 : null;
+    if (S.paused && S.phase === "walk" && left != null && left <= 0) { togglePause(true); return; }
+    let lbl = `Start ${PAUSE_S} s pause`, warn = false;
+    if (!S.paused && S.phase === "walk") { const stp = walkStopForZone(S.zone); if (!stp) { lbl += ` · ${zoneLabel(S.zone)} has no point`; warn = true; } else if (walkPausesDone().has(stp.pid)) { lbl += ` · point ${stp.order} already done`; warn = true; } else lbl += ` · point ${stp.order} (${disp(stp.zone)})`; }
+    pb.textContent = S.paused ? `Pausing · ${Math.max(0, Math.ceil(left))} s (tap to end early)` : lbl;
+    pb.style.cssText = S.paused ? "" : warn ? "border-color:#b7791f;color:#8a5a12;background:#fdf3e1" : "border-color:var(--zone);color:var(--zone);background:color-mix(in srgb,var(--zone) 10%,var(--surface))";
+  }
+}
+function probeDone(p) { return S.events.some(e => !e.void && e.type === "rating" && e.probe === p); }
+function probeLabel(p) { return p === "END" ? "Final ratings (T final)" : p + " ratings"; }
+function hm(t) { const d = new Date(t); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; }
+const STEPS = [
+  { id: "sync1", label: "Sync 1", kind: "sync", n: 1 },
+  { id: "acc1", label: "5-dot 1", kind: "phase" },
+  { id: "acclim", label: "Acclimatisation", kind: "phase" },
+  { id: "work", label: "Work", kind: "phase" },
+  { id: "r1", label: "T1", kind: "probe", probe: "T1" },
+  { id: "r2", label: "T2", kind: "probe", probe: "T2" },
+  { id: "r3", label: "T3", kind: "probe", probe: "T3" },
+  { id: "walk", label: "Walk-through", kind: "phase" },
+  { id: "sync2", label: "Sync 2", kind: "sync", n: 2 },
+  { id: "acc2", label: "5-dot 2", kind: "phase" },
+  { id: "rend", label: "T final", kind: "probe", probe: "END" },
+  { id: "end", label: "End", kind: "phase" },
+];
+function stepDone(s) {
+  if (s.kind === "sync") return S.events.filter(e => !e.void && e.type === "sync").length >= s.n;
+  if (s.kind === "probe") return probeDone(s.probe);
+  return !!phaseStart(s.id);
+}
+$("#steps").addEventListener("click", e => {
+  const b = e.target.closest("[data-step]"); if (!b) return; const s = STEPS.find(x => x.id === b.dataset.step);
+  if (s.kind === "sync") return S.syncN === 0 ? openSyncInfo(false) : doSync();
+  if (s.kind === "probe") return openProbe(s.probe);
+  if (s.id === "acc1" || s.id === "acc2") return openAccuracy(s.id);
+  if (s.id === "walk") return openWalk();
+  if (S.phase === "walk" && s.kind === "phase") return openWalkFinish(s.id === "end" ? "work" : s.id);
+  if (s.id === "end") return openEnd();
+  setPhase(s.id);
+});
+$("#rail").addEventListener("click", e => {
+  const t = e.target;
+  const ph = t.closest("[data-phase]"); if (ph) { const id = ph.dataset.phase; if (id === "acc1" || id === "acc2") return openAccuracy(id); if (id === "walk") return openWalk(); if (S.phase === "walk") return openWalkFinish(id); return setPhase(id); }
+  const tk = t.closest("[data-task]"); if (tk) return setTask(tk.dataset.task);
+  const ini = t.closest("[data-init]"); if (ini) return setInitiator(ini.dataset.init);
+  const pr = t.closest("[data-probe]"); if (pr) return openProbe(pr.dataset.probe);
+  const vd = t.closest("[data-void]"); if (vd) return voidEvent(+vd.dataset.void);
+  if (t.closest("#btnInt")) return interruption();
+  if (t.closest("#btnLeave")) return openLeave();
+  if (t.closest("#btnPause")) return togglePause();
+  if (t.closest("[data-walkinfo]")) return openWalk();
+  if (t.closest("[data-walkfinish]")) return openWalkFinish("work");
+  if (t.closest("#btnNote")) return addNote();
+});
+$("#rail").addEventListener("keydown", e => { if (e.target.id === "noteIn" && e.key === "Enter") addNote(); });
+$("#btnSync").onclick = doSync; $("#btnFix").onclick = openFix; $("#btnUndo").onclick = undo;
+attachGestures($("#liveMap"), "live", liveTap);
+setInterval(() => {
+  if (S.started && !S.ended && S.phase === "acclim" && phaseStart("acclim") && Date.now() - phaseStart("acclim") >= ACCLIM_MIN * 60000) { setPhase("work"); toast("Acclimatisation done: natural work started automatically."); }
+  $("#clock").textContent = hms(Date.now());
+  renderStatus();
+  if (!$("#tab-live").hidden) tick();
+}, 1000);
+
+/* ---------------- Export tab ---------------- */
+const EV_COLS = ["session_id", "participant", "seq", "t_epoch_ms", "t_utc", "type", "phase", "zone_id", "zone_name", "from_zone_id", "from_zone_name", "to_zone_id", "to_zone_name", "line_id", "line_name", "line_type", "task", "initiator", "place", "sync_n", "probe", "note", "void"];
+const RT_COLS = ["session_id", "participant", "probe", "event_seq", "t_epoch_ms", "t_utc", "item", "zone_id", "zone_name", "value", "void"];
+function eventRows(s) {
+  return s.events.map(e => ({ session_id: s.id, participant: s.meta.participant, seq: e.seq, t_epoch_ms: e.t, t_utc: e.iso, type: e.type, phase: e.phase,
+    zone_id: e.zone, zone_name: zoneName(e.zone), from_zone_id: e.from_zone || "", from_zone_name: e.from_zone ? zoneName(e.from_zone) : "",
+    to_zone_id: e.to_zone || "", to_zone_name: e.to_zone ? zoneName(e.to_zone) : "", line_id: e.line_id || "", line_name: e.line_name || "", line_type: e.line_type || "",
+    task: e.task || "", initiator: e.initiator || "", place: e.place ? placeLabel(e.place) : "", sync_n: e.sync_n || "", probe: e.probe || "", note: e.note || "", void: e.void ? 1 : 0 }));
+}
+function ratingRows(s) {
+  const rows = s.ratings.map(r => ({ session_id: s.id, participant: s.meta.participant, probe: r.probe, event_seq: r.event_seq, t_epoch_ms: r.t, t_utc: r.iso, item: r.item, zone_id: r.zone_id, zone_name: r.zone_name, value: r.value, void: r.void ? 1 : 0 }));
+  if (s.inventory) {
+    const inv = s.inventory, t = Date.parse(inv.savedAt) || "";
+    ["ageBand", "gender", "heightCm", "heightEntered", "grade", "monthsInPost", "lenses", "eligibility"].forEach(k => rows.push({ session_id: s.id, participant: s.meta.participant, probe: "inventory", event_seq: "", t_epoch_ms: t, t_utc: inv.savedAt, item: k, zone_id: "", zone_name: "", value: inv[k], void: 0 }));
+    Object.entries(inv.familiarity || {}).forEach(([z, v]) => rows.push({ session_id: s.id, participant: s.meta.participant, probe: "inventory", event_seq: "", t_epoch_ms: t, t_utc: inv.savedAt, item: "familiarity", zone_id: z, zone_name: zoneName(z), value: v, void: 0 }));
+  }
+  return rows;
+}
+function fileStem(s) { const d = new Date(s.started || s.created); return `field-logger_${(s.meta.participant || "P").replace(/\W+/g, "")}_s${s.meta.sessionNo}_${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}`; }
+function sessionJson(s) {
+  return JSON.stringify({ schema: "field-logger/1", app_version: APP_VERSION, exported_at: new Date().toISOString(), tablet_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    session: { id: s.id, started: s.started, ended: s.ended, meta: s.meta, inventory: s.inventory },
+    geometry: { ...(s.geometry || {}), current_signature: geoSignature(), zones: geo.zones.map(z => ({ id: z.id, name: z.name, kind: z.kind || "analysis", points: z.points })), lines: geo.lines },
+    events: s.events, ratings: s.ratings }, null, 1);
+}
+async function exportSession(s, kind) {
+  let ok = false; const stem = fileStem(s);
+  if (kind === "json") ok = await saveFile(stem + ".json", sessionJson(s));
+  if (kind === "events") ok = await saveFile(stem + "_events.csv", toCsv(EV_COLS, eventRows(s)));
+  if (kind === "ratings") ok = await saveFile(stem + "_ratings.csv", toCsv(RT_COLS, ratingRows(s)));
+  if (ok && kind === "json" && s === S) { S.lastBackup = Date.now(); persist(); }
+  if (ok) renderExport();
+  return ok;
+}
+let confirmKey = null;
+function renderExport() {
+  const s = S; const live = s.events.filter(e => !e.void);
+  const c = t => live.filter(e => e.type === t).length;
+  const stats = [["Crossings", c("crossing")], ["Open-boundary changes", c("boundary")], ["Corrections", c("zone_fix")], ["Interruptions", c("interruption")], ["Task changes", c("task")], ["Syncs", c("sync")], ["Rating sets", c("rating")], ["Areas entered", visitedZones().length]];
+  const checks = sessionChecks(s);
+  $("#tab-export").innerHTML = exportHtml(s, stats, checks);
+}
+function sessionChecks(s) {
+  const live = s.events.filter(e => !e.void); const c = t => live.filter(e => e.type === t).length; const checks = [];
+  if (s.started) {
+    if (!live.some(e => e.type === "rating" && e.probe === "END")) checks.push("T final ratings not done.");
+    if (c("sync") < 2) checks.push("Fewer than two syncs. Sync at the start and again at the end, so clock drift can be checked.");
+    if (!s.meta.exposureMs) checks.push("Scene camera exposure not recorded (Session tab).");
+    if (!s.meta.walkCompletion) checks.push("Walk-through completion not recorded (Walk-through sheet: complete / partial / not attempted).");
+    if (!["T1", "T2", "T3"].every(probeDone)) checks.push("Not all of T1–T3 were rated.");
+    if (live.some(e => e.type === "interruption" && !e.initiator)) checks.push("Some interruptions have no initiator.");
+    if (s.meta.sessionNo === "1" && !s.inventory) checks.push("Participant inventory not filled in.");
+    if (s.geometry?.example) checks.push("This session used the example floorplan, not your own floor plan.");
+  }
+  return checks;
+}
+function exportHtml(s, stats, checks) {
+  return `<div class="pad stack">
+  <div><h2>Export</h2><p class="sub">Save the session file after every session, and copy it to the encrypted laptop the same day. The tablet keeps a copy only until you clear it. The session file is complete; the two CSV files are the same data in flat tables for the pipeline.</p></div>
+  <div class="panel stack">
+    <div class="row" style="justify-content:space-between"><div><h3 style="margin:0">Current session</h3><div class="note">${s.started ? `${esc(s.meta.participant)} · session ${esc(s.meta.sessionNo)} · started ${new Date(s.started).toLocaleString()}${s.ended ? " · ended " + hms(s.ended) : ""}` : "Not started"}</div></div>
+    <div class="note">${s.lastBackup ? "Session file last saved " + hms(s.lastBackup) : "Session file not saved yet"}</div></div>
+    <div class="stats">${stats.map(([l, v]) => `<div class="stat"><b>${v}</b><span>${l}</span></div>`).join("")}</div>
+    ${checks.length ? `<div class="help"><b>Check before you finish</b><ul style="margin:6px 0 0;padding-left:18px">${checks.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}
+    <div class="row">
+      <button class="btn primary" data-exp="json" ${s.started ? "" : "disabled"}>Save session file (.json)</button>
+      <button class="btn" data-exp="events" ${s.started ? "" : "disabled"}>Events (.csv)</button>
+      <button class="btn" data-exp="ratings" ${s.started ? "" : "disabled"}>Ratings (.csv)</button>
+    </div>
+    ${s.started && !s.ended ? `<p class="note" style="margin:0">To finish this session, tap <b>End</b> in the step bar on the Live tab.</p>` : ""}
+  </div>
+  <div class="panel"><h3>Earlier sessions on this tablet (${store.archive.length})</h3>
+    <div class="arch">${store.archive.map((a, i) => `<div class="item"><div class="meta"><b>${esc(a.meta.participant || "—")}</b> · session ${esc(a.meta.sessionNo)} · <span class="mono">${a.started ? new Date(a.started).toLocaleString() : "not started"}</span><div class="note">${a.events.filter(e => !e.void && e.type === "crossing").length} crossings · ${a.lastBackup ? "saved " + new Date(a.lastBackup).toLocaleString() : "never saved"}</div></div>
+      <button class="btn sm" data-aexp="json" data-i="${i}">.json</button><button class="btn sm" data-aexp="events" data-i="${i}">Events</button><button class="btn sm" data-aexp="ratings" data-i="${i}">Ratings</button>
+      ${confirmKey === "del" + a.id ? `<span class="confirm">Delete for good? <button class="btn danger sm" data-del="${i}">Delete</button><button class="btn sm" data-nodel>Cancel</button></span>` : `<button class="btn ghost sm danger" data-askdel="${a.id}">Remove</button>`}</div>`).join("") || `<p class="note">None yet.</p>`}</div>
+  </div>
+  <div class="panel"><h3>Consent records (${store.consents.length})</h3>
+    <p class="note" style="margin:0 0 10px">Kept apart from the session files because they contain names and signatures. Save each one, move it to the consent folder on the encrypted laptop, then remove it from the tablet.</p>
+    <div class="arch">${store.consents.map((c, i) => `<div class="item"><div class="meta"><b class="mono">${esc(c.participantCode)}</b> · signed ${new Date(c.signedAt).toLocaleString()}<div class="note">${c.exportedAt ? "saved " + new Date(c.exportedAt).toLocaleString() : "not saved yet"} · optional statement: ${c.optional.agreed ? "yes" : "no"}</div></div>
+      <button class="btn sm" data-csavef="${i}">Save (.html)</button>
+      ${confirmKey === "cdel" + c.id ? `<span class="confirm">Remove from tablet? <button class="btn danger sm" data-cdel="${i}">Remove</button><button class="btn sm" data-nodel>Cancel</button></span>` : `<button class="btn ghost sm danger" data-caskdel="${c.id}" ${c.exportedAt ? "" : "disabled title=\"Save it first\""}>Remove</button>`}</div>`).join("") || `<p class="note">None on this tablet.</p>`}</div>
+  </div>
+  <div class="panel"><h3>File format</h3><p class="note" style="margin:0">Times are the tablet clock as UTC milliseconds. Sync events give the tablet time at the moment the flashing screen is visible in the scene video, which aligns this log to the recording. Zone IDs refer to the geometry stored inside the session file. Voided entries stay in the files with <span class="mono">void = 1</span>.</p></div>
+  </div>`;
+}
+$("#tab-export").addEventListener("click", async e => {
+  const t = e.target;
+  const ex = t.closest("[data-exp]"); if (ex) return exportSession(S, ex.dataset.exp);
+  const ax = t.closest("[data-aexp]"); if (ax) { const a = store.archive[+ax.dataset.i]; await exportSession(a, ax.dataset.aexp); if (ax.dataset.aexp === "json") { a.lastBackup = Date.now(); persist(); renderExport(); } return; }
+  if (t.closest("[data-nodel]")) { confirmKey = null; return renderExport(); }
+  const cs = t.closest("[data-csavef]"); if (cs) { const c = store.consents[+cs.dataset.csavef]; const d = new Date(c.signedAt); if (await saveFile(`consent_${c.participantCode.replace(/\W+/g, "")}_${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}.html`, consentHtml(c))) { c.exportedAt = new Date().toISOString(); persist(); renderExport(); } return; }
+  const cad = t.closest("[data-caskdel]"); if (cad) { confirmKey = "cdel" + cad.dataset.caskdel; return renderExport(); }
+  const cdl = t.closest("[data-cdel]"); if (cdl) { store.consents.splice(+cdl.dataset.cdel, 1); confirmKey = null; persist(); return renderExport(); }
+  const ad = t.closest("[data-askdel]"); if (ad) { confirmKey = "del" + ad.dataset.askdel; return renderExport(); }
+  const dl = t.closest("[data-del]"); if (dl) { store.archive.splice(+dl.dataset.del, 1); confirmKey = null; persist(); return renderExport(); }
+});
+
+/* ---------------- Geometry editor ---------------- */
+const G = { tool: "select", draft: [], hover: null, sel: null, naming: null };
+const TOOL_HELP = {
+  select: "Tap a line or an area to edit it.",
+  zone: "Tap the corners of the area in order. Tap the first corner again, or press Finish area.",
+  threshold: "Tap both ends of the doorway. The areas on each side are detected automatically.",
+  open: "Tap both ends of the open boundary between two areas (no wall, no door).",
+};
+function snap(p) {
+  const svg = $("#geoMap"); const r = svg.getBoundingClientRect(); const tol = views.geo.vb[2] / r.width * 14;
+  let best = null, bd = tol;
+  geo.zones.forEach(z => z.points.forEach(q => { const d = Math.hypot(q.x - p.x, q.y - p.y); if (d < bd) { bd = d; best = q; } }));
+  geo.lines.forEach(l => [l.a, l.b].forEach(q => { const d = Math.hypot(q.x - p.x, q.y - p.y); if (d < bd) { bd = d; best = q; } }));
+  return best ? { x: best.x, y: best.y } : { x: Math.round(p.x), y: Math.round(p.y) };
+}
+function geoTap(e) {
+  const svg = $("#geoMap"); const p = svgPoint(svg, e.clientX, e.clientY);
+  if (G.tool === "select") {
+    const ln = hitAt(e, "[data-line]"); if (ln) { G.sel = { kind: "line", id: ln.dataset.line }; return renderGeo(); }
+    const zn = hitAt(e, "[data-zone]"); G.sel = zn ? { kind: "zone", id: zn.dataset.zone } : null; return renderGeo();
+  }
+  const q = snap(p);
+  if (G.tool === "zone") {
+    if (G.draft.length >= 3) { const f = G.draft[0]; const tol = views.geo.vb[2] / svg.getBoundingClientRect().width * 16; if (Math.hypot(q.x - f.x, q.y - f.y) < tol) return finishZone(); }
+    G.draft.push(q); return renderGeo();
+  }
+  if (G.tool === "threshold" || G.tool === "open") {
+    G.draft.push(q);
+    if (G.draft.length === 2) {
+      const n = geo.lines.filter(l => l.type === G.tool).length + 1;
+      const l = { id: uid("L"), name: (G.tool === "threshold" ? "T" : "O") + pad(n), type: G.tool, a: G.draft[0], b: G.draft[1], zones: ["", ""] };
+      l.zones = detectSides(l); geo.lines.push(l); G.draft = []; G.sel = { kind: "line", id: l.id }; geoChanged();
+      if (!l.zones[0] || !l.zones[1]) toast(`${l.name}: one side is not inside an area. Set it by hand.`, "warn");
+    }
+    return renderGeo();
+  }
+}
+function finishZone() {
+  if (G.draft.length < 3) { toast("An area needs at least three corners", "warn"); return; }
+  const z = { id: uid("Z"), name: "Area " + (geo.zones.length + 1), points: G.draft }; geo.zones.push(z); G.draft = []; G.sel = { kind: "zone", id: z.id }; G.naming = z.id; geoChanged(); renderGeo();
+}
+function geoChanged() {
+  if (geo.example) { geo.example = false; geo.name = "Edited floor plan"; }
+  if (geo.builtin) { geo.builtin = false; geo.name = geo.name.replace(/( \(edited\))?$/, " (edited)"); }
+  saveGeo(); renderStatus();
+}
+function renderGeo() {
+  renderMap("geo");
+  $("#geoHint").textContent = G.draft.length ? `${G.draft.length} point${G.draft.length > 1 ? "s" : ""} placed` : "";
+  const issues = geoIssues(); const th = geo.lines.filter(l => l.type === "threshold"), op = geo.lines.filter(l => l.type === "open");
+  let selHtml = "";
+  if (G.sel?.kind === "line") {
+    const l = geo.lines.find(x => x.id === G.sel.id);
+    if (l) {
+      const zopt = v => `<option value="">—</option>` + geo.zones.map(z => `<option value="${z.id}" ${z.id === v ? "selected" : ""}>${esc(disp(z.name))}</option>`).join("");
+      selHtml = `<div class="panel stack" style="padding:12px"><h3 style="margin:0">Selected line</h3>
+      <div class="field"><label class="lbl" for="lnName">Name</label><input id="lnName" value="${esc(l.name)}"></div>
+      <div><span class="lbl">Type</span><div class="seg"><button data-ltype="threshold" aria-pressed="${l.type === "threshold"}">Door (crossing)</button><button data-ltype="open" aria-pressed="${l.type === "open"}">Open boundary</button></div></div>
+      <div class="field"><label class="lbl" for="lnA">Area on one side</label><select id="lnA">${zopt(l.zones[0])}</select></div>
+      <div class="field"><label class="lbl" for="lnB">Area on the other side</label><select id="lnB">${zopt(l.zones[1])}</select></div>
+      <div class="row"><button class="btn sm" id="lnDetect">Detect areas again</button><button class="btn sm danger" id="lnDel">Delete line</button></div></div>`;
+    }
+  } else if (G.sel?.kind === "zone") {
+    const z = zoneById(G.sel.id);
+    if (z) selHtml = `<div class="panel stack" style="padding:12px"><h3 style="margin:0">Selected area</h3>
+      <div class="field"><label class="lbl" for="znName">Name</label><input id="znName" value="${esc(z.name)}"></div>
+      <div class="row"><button class="btn sm danger" id="znDel">Delete area</button><span class="note">${geo.lines.filter(l => l.zones.includes(z.id)).length} lines border it</span></div></div>`;
+  }
+  const running = S.started && !S.ended;
+  $("#geoRail").innerHTML = `
+    <div><h2 style="font-size:17px">Geometry</h2><p class="note" style="margin:4px 0 0">Set this up once, on the laptop, from the most accurate floorplan. Save the file, then load the same file on the tablet and into the analysis pipeline.</p></div>
+    ${running ? `<div class="help">A session is running. Changes here change the live map.</div>` : ""}
+    ${!geoStored ? `<div class="help">The floorplan image is too large to keep on this device. Load the geometry file again after reopening the page.</div>` : ""}
+    ${geo.imageMissing ? `<div class="help">The floorplan image was not kept on this device. Load the geometry file to restore it.</div>` : ""}
+    <div class="sec"><h3>Files</h3><div class="row">
+      <button class="btn sm" id="gLoad">Load geometry or zone file</button>
+      <button class="btn sm" id="gImg">Floorplan image</button>
+      <button class="btn sm primary" id="gSave">Save geometry file</button>
+      ${geo.builtin ? "" : `<button class="btn sm ghost" id="gDefault">Use built-in floor plan</button>`}
+    </div><p class="note" style="margin:6px 0 0">${esc(geo.name)} · ${geo.zones.length} areas · ${th.length} doors · ${op.length} open boundaries</p></div>
+    <div class="sec"><h3>Tool</h3><div class="tools">
+      ${[["select", "Select"], ["zone", "Draw area"], ["threshold", "Draw door"], ["open", "Draw open boundary"]].map(([k, l]) => `<button data-tool="${k}" aria-pressed="${G.tool === k}">${l}</button>`).join("")}
+    </div><div class="help" style="margin-top:6px;background:var(--surface-2)">${TOOL_HELP[G.tool]}</div>
+    ${G.draft.length ? `<div class="row" style="margin-top:6px">${G.tool === "zone" ? `<button class="btn sm primary" id="gFinish">Finish area</button>` : ""}<button class="btn sm" id="gCancel">Cancel</button></div>` : ""}</div>
+    ${selHtml}
+    <div class="sec"><h3>Check (${issues.length})</h3>${issues.length ? `<div class="items">${issues.map(i => `<span class="issue">${esc(i)}</span>`).join("")}</div>` : `<p class="note" style="margin:0">Every line has an area on both sides and every area can be entered.</p>`}</div>
+    <div class="sec"><h3>Doors and boundaries</h3><div class="items">${geo.lines.map(l => `<button data-pick-line="${l.id}"><span>${esc(l.name)} <span class="k">${l.type === "threshold" ? "door" : "open"}</span></span><span class="k">${esc(zoneLabel(l.zones[0]))} | ${esc(zoneLabel(l.zones[1]))}</span></button>`).join("") || `<span class="note">None yet.</span>`}</div></div>
+    <div class="sec"><h3>Areas</h3><div class="items">${geo.zones.map(z => `<button data-pick-zone="${z.id}"><span>${esc(disp(z.name))}</span><span class="k">${z.points.length} pts</span></button>`).join("")}</div></div>`;
+  if (G.naming) { const el = $("#znName"); if (el) { el.focus(); el.select(); } G.naming = null; }
+}
+$("#geoRail").addEventListener("click", e => {
+  const t = e.target;
+  const tl = t.closest("[data-tool]"); if (tl) { G.tool = tl.dataset.tool; G.draft = []; G.hover = null; return renderGeo(); }
+  const pl = t.closest("[data-pick-line]"); if (pl) { G.sel = { kind: "line", id: pl.dataset.pickLine }; G.tool = "select"; return renderGeo(); }
+  const pz = t.closest("[data-pick-zone]"); if (pz) { G.sel = { kind: "zone", id: pz.dataset.pickZone }; G.tool = "select"; return renderGeo(); }
+  const lt = t.closest("[data-ltype]"); if (lt) { const l = geo.lines.find(x => x.id === G.sel.id); l.type = lt.dataset.ltype; geoChanged(); return renderGeo(); }
+  if (t.closest("#gFinish")) return finishZone();
+  if (t.closest("#gCancel")) { G.draft = []; return renderGeo(); }
+  if (t.closest("#gLoad")) return $("#fileGeo").click();
+  if (t.closest("#gImg")) return $("#fileImg").click();
+  if (t.closest("#gSave")) { const name = (geo.name || "geometry").replace(/\W+/g, "_").toLowerCase(); return saveFile(`field-logger_geometry_${name}.json`, JSON.stringify({ ...geo, schema: "field-logger-geometry/1", signature: geoSignature(), exportedAt: new Date().toISOString() })); }
+  if (t.closest("#gDefault")) { geo = structuredClone(DEFAULT_GEO); saveGeo(); G.sel = null; fitVB("geo"); fitVB("live"); renderAll(); toast("Built-in floor plan restored"); return; }
+  if (t.closest("#lnDetect")) { const l = geo.lines.find(x => x.id === G.sel.id); l.zones = detectSides(l); geoChanged(); return renderGeo(); }
+  if (t.closest("#lnDel")) { geo.lines = geo.lines.filter(x => x.id !== G.sel.id); G.sel = null; geoChanged(); return renderGeo(); }
+  if (t.closest("#znDel")) { const id = G.sel.id; geo.zones = geo.zones.filter(x => x.id !== id); geo.lines.forEach(l => l.zones = l.zones.map(z => z === id ? "" : z)); G.sel = null; geoChanged(); return renderGeo(); }
+});
+$("#geoRail").addEventListener("change", e => {
+  const t = e.target; if (!G.sel) return;
+  if (G.sel.kind === "line") { const l = geo.lines.find(x => x.id === G.sel.id); if (t.id === "lnName") l.name = t.value.trim() || l.name; if (t.id === "lnA") l.zones[0] = t.value; if (t.id === "lnB") l.zones[1] = t.value; }
+  if (G.sel.kind === "zone" && t.id === "znName") { const z = zoneById(G.sel.id); z.name = t.value.trim() || z.name; }
+  geoChanged(); renderGeo();
+});
+attachGestures($("#geoMap"), "geo", geoTap, e => { if (G.draft.length && G.tool !== "select") { G.hover = snap(svgPoint($("#geoMap"), e.clientX, e.clientY)); renderMap("geo"); } });
+
+function loadImageDims(url) { return new Promise((res, rej) => { const i = new Image(); i.onload = () => res({ w: i.naturalWidth, h: i.naturalHeight }); i.onerror = rej; i.src = url; }); }
+$("#fileGeo").addEventListener("change", async e => {
+  const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+  try {
+    const d = JSON.parse(await f.text());
+    if (!Array.isArray(d.zones)) throw new Error("no zones");
+    const img = d.image || null;
+    // A loaded file must not be able to add markup or fetch anything from the network.
+    if (img && !/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(img)) throw new Error("image must be embedded");
+    const num = v => typeof v === "number" && Number.isFinite(v);
+    const key = v => typeof v === "string" && /^[\w:-]+$/.test(v);
+    const pointOk = p => p && num(p.x) && num(p.y);
+    if (![d.width, d.height].every(v => v == null || num(v))) throw new Error("bad size");
+    if (!d.zones.every(z => (!z.id || key(z.id)) && (z.points || []).every(pointOk))) throw new Error("bad area");
+    if (!(d.lines || []).every(l => (!l.id || key(l.id)) && pointOk(l.a) && pointOk(l.b) && (l.zones || []).every(z => z === "" || key(z)))) throw new Error("bad line");
+    let w = d.width, h = d.height;
+    if (img && (!w || !h)) { const dims = await loadImageDims(img); w = dims.w; h = dims.h; }
+    const zones = d.zones.map(z => ({ id: z.id || uid("Z"), name: z.name || "Area", ...(["room", "passage"].includes(z.kind) ? { kind: z.kind } : {}), points: (z.points || []).map(p => ({ x: +p.x, y: +p.y })) }));
+    if (!w || !h) { const xs = zones.flatMap(z => z.points.map(p => p.x)), ys = zones.flatMap(z => z.points.map(p => p.y)); w = Math.max(...xs) + 20; h = Math.max(...ys) + 20; }
+    geo = { schema: "field-logger-geometry/1", metres_per_px: d.metres_per_px || null, name: d.name || f.name.replace(/\.json$/, ""), example: false, width: w, height: h, image: img, zones,
+      lines: (d.lines || []).map(l => ({ id: l.id || uid("L"), name: l.name, type: l.type === "open" ? "open" : "threshold", a: l.a, b: l.b, zones: l.zones || ["", ""] })) };
+    saveGeo(); G.sel = null; G.draft = []; fitVB("geo"); fitVB("live"); renderAll();
+    toast(`Loaded ${zones.length} areas and ${geo.lines.length} lines${d.lines ? "" : ". Now draw the doors and open boundaries."}`);
+  } catch (err) { toast("That file is not a geometry or zone file this tool can read.", "warn"); }
+});
+$("#fileImg").addEventListener("change", e => {
+  const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+  const r = new FileReader();
+  r.onload = async () => {
+    const dims = await loadImageDims(r.result);
+    const hadZones = geo.zones.length && !geo.example;
+    if (!hadZones) geo = { schema: "field-logger-geometry/1", name: f.name.replace(/\.\w+$/, ""), example: false, width: dims.w, height: dims.h, image: r.result, zones: [], lines: [] };
+    else { geo.image = r.result; if (!geo.width) { geo.width = dims.w; geo.height = dims.h; } }
+    saveGeo(); fitVB("geo"); fitVB("live"); renderAll(); toast(hadZones ? "Floorplan image added under the existing areas" : "Floorplan loaded. Draw the areas next.");
+  };
+  r.readAsDataURL(f);
+});
+
+/* ---------------- Tabs ---------------- */
+function showTab(id) {
+  document.querySelectorAll(".tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === id));
+  ["session", "live", "export", "geometry"].forEach(t => $("#tab-" + t).hidden = t !== id);
+  try { sessionStorage.setItem("field_logger_tab", id); } catch {}
+  if (id === "session") renderSession();
+  if (id === "live") { fitVB("live"); renderLive(); }
+  if (id === "export") { confirmKey = null; renderExport(); }
+  if (id === "geometry") { fitVB("geo"); renderGeo(); }
+}
+document.querySelector(".tabs").addEventListener("click", e => { const b = e.target.closest("[data-tab]"); if (b) showTab(b.dataset.tab); });
+document.addEventListener("click", e => { const g = e.target.closest("[data-goto]"); if (g) showTab(g.dataset.goto); });
+function renderAll() { renderStatus(); const cur = document.querySelector('.tabs [aria-selected="true"]')?.dataset.tab || "session"; showTab(cur); }
+
+let startTab = "session"; try { startTab = sessionStorage.getItem("field_logger_tab") || (S.started && !S.ended ? "live" : "session"); } catch {}
+showTab(startTab);
+$("#clock").textContent = hms(Date.now());
+if (S.started && !S.ended) requestWake();
+})();
+</script>
+
+<script>
+if ("serviceWorker" in navigator) { window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {})); }
+if (navigator.storage && navigator.storage.persist) { navigator.storage.persist().catch(() => {}); }
+</script></body></html>
