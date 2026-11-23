@@ -6,3 +6,4 @@ node_modules/
 *.png
 !docs/demo.png
 consent_*
+!docs/screens/*.png
